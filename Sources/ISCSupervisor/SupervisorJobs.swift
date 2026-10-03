@@ -20,7 +20,7 @@ public actor SupervisorJobStore {
     }
     public func state(for id: UUID) -> SupervisorTaskState? { states[id] }
     public func allStates() -> [SupervisorTaskState] { states.values.sorted { $0.updatedAt < $1.updatedAt } }
-    public func submit(_ job: SupervisorJob, operation: @escaping @Sendable (_ update: @Sendable (SupervisorTaskPhase, Double, String?) -> Void) async throws -> Void) -> UUID {
+    public func submit(_ job: SupervisorJob, operation: @escaping @Sendable (_ update: @Sendable (SupervisorTaskPhase, Double, String?) async -> Void) async throws -> Void) -> UUID {
         let initial = SupervisorTaskState(id: job.id, kind: job.kind)
         states[job.id] = initial; persist()
         tasks[job.id] = Task { [weak self] in
@@ -28,7 +28,7 @@ public actor SupervisorJobStore {
                 await self?.update(job.id, phase: .queued, progress: 0, message: "Queued")
                 try await operation { [weak self] phase, progress, message in
                     guard let self else { return }
-                    Task { await self.update(job.id, phase: phase, progress: progress, message: message) }
+                    await self.update(job.id, phase: phase, progress: progress, message: message)
                 }
                 await self?.update(job.id, phase: .completed, progress: 1, message: "Completed")
             } catch is CancellationError { await self?.update(job.id, phase: .cancelled, progress: nil, message: "Cancelled") }

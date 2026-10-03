@@ -42,7 +42,14 @@ public actor DockerSupervisor {
         default:
             try await run(arguments: plan.arguments, output: output)
         }
-        if waitForReady, case .compose = source {} else if waitForReady { _ = try await waitUntilReady(name: name) }
+        if waitForReady, case .compose = source {} else if waitForReady {
+            do { _ = try await waitUntilReady(name: name) }
+            catch {
+                try? await run(arguments: ["stop", name], output: output)
+                try? await run(arguments: ["rm", "--force", name], output: output)
+                throw error
+            }
+        }
         activeNames.insert(name)
         activeSources[name] = source
         return plan

@@ -81,7 +81,7 @@ public actor SupervisorService {
         guard stateDirectory.isFileURL, stateDirectory.path.hasPrefix("/") else {
             throw DeploymentPlanError.invalidPlan
         }
-        let jobs = SupervisorJobStore()
+        let jobs = try SupervisorJobStore(location: stateDirectory.appendingPathComponent("jobs.json"))
         let ledger = try DeploymentLedger(root: stateDirectory)
         let manifestStore = try RuntimeManifestStore(location: stateDirectory.appendingPathComponent("runtime-manifest.json"))
         self.jobs = jobs

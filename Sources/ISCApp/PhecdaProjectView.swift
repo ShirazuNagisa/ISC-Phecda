@@ -178,6 +178,16 @@ struct PhecdaProjectDetail: View {
             } catch { deploymentMessage = error.localizedDescription }
         }
     }
+    func rollbackPublishedService(_ service: PublishedService) async throws {
+        if let ddnsID = service.ddnsID {
+            _ = try await model.request("DELETE", "/v1/ddns-tasks/\(KernelClient.pathComponent(ddnsID))")
+        }
+        if let routeID = service.routeID {
+            let routes = model.items("/v1/proxy/routes").filter { $0.id != routeID }
+            _ = try await model.request("PUT", "/v1/proxy/routes", body: .object(["items": .array(routes)]))
+        }
+        await model.refreshAll()
+    }
     func bind(_ service: PublishedService) {
         guard let deploymentID else { return }
         model.execute {
@@ -188,6 +198,7 @@ struct PhecdaProjectDetail: View {
                 deploymentMessage = tr("公网服务已关联。", "Public service binding saved.")
             } catch {
                 let message = error.localizedDescription
+                try? await rollbackPublishedService(service)
                 try? await model.rollbackDeployment(deploymentID)
                 let failure: JSONValue = .object(["id": .string(deploymentID.uuidString), "project_id": .string(project.id), "preset_id": .string(selectedPreset?["id"].string ?? ""), "state": .string("failed"), "last_error": .string(message)])
                 _ = try? await model.request("POST", "/v1/phecda/deployments", body: failure)

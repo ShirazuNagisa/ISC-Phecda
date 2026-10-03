@@ -41,10 +41,27 @@ public actor DockerSupervisor {
         self.planner = planner; self.stateLocation = stateLocation
         if let data = try? Data(contentsOf: stateLocation), !data.isEmpty {
             self.activeSources = try JSONDecoder().decode([String: DockerSourcePlan].self, from: data)
-            self.activeNames = Set(self.activeSources.keys)
+            self.activeNames = []
         }
     }
 
+    public func reconcilePersistedSources() async {
+        var live: Set<String> = []
+        for (name, source) in activeSources {
+            do {
+                switch source {
+                case let .compose(file):
+                    let services = try await composeStatus(file: file)
+                    if !services.isEmpty && services.allSatisfy({ ["running", "up"].contains($0.state.lowercased()) }) { live.insert(name) }
+                default:
+                    if try await inspect(name: name).running { live.insert(name) }
+                }
+            } catch { }
+        }
+        activeNames = live
+        activeSources = activeSources.filter { live.contains($0.key) }
+        persistState()
+    }
     public func plan(source: DockerSourcePlan, name: String, ports: [Int] = [], policy: DockerPolicy = .init()) throws -> DockerCommandPlan {
         try planner.plan(source: source, name: name, ports: ports, policy: policy)
     }

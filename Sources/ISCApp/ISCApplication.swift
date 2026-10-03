@@ -36,10 +36,8 @@ import ISCCore
             }
         }
         Task { await model.start() }
-        if !UserDefaults.standard.bool(forKey: "hasOpenedISC") {
-            UserDefaults.standard.set(true, forKey: "hasOpenedISC")
-            openWindow()
-        }
+        // Xcode 调试和首次启动都直接展示管理窗口；关闭窗口只回到菜单栏，不退出应用。
+        openWindow()
     }
     @objc private func togglePopover() {
         guard let button = statusItem?.button else { return }

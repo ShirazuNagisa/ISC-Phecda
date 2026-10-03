@@ -1,0 +1,50 @@
+import Foundation
+
+public struct DeploymentPlan: Codable, Sendable, Equatable, Identifiable {
+    public let id: UUID
+    public let workspace: URL
+    public let installCommands: [PresetCommand]
+    public let buildCommand: PresetCommand?
+    public let runCommand: PresetCommand
+    public let localPort: Int
+    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int) throws {
+        guard workspace.isFileURL, workspace.path.hasPrefix("/"), (1...65535).contains(localPort) else { throw DeploymentPlanError.invalidPlan }
+        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort
+    }
+    public var previews: [ProcessCommandPreview] { installCommands.map { ProcessCommandPreview(preset: $0, workingDirectory: workspace) } + (buildCommand.map { [ProcessCommandPreview(preset: $0, workingDirectory: workspace)] } ?? []) + [ProcessCommandPreview(preset: runCommand, workingDirectory: workspace)] }
+}
+
+public enum DeploymentPlanError: Error, LocalizedError, Sendable, Equatable {
+    case invalidPlan
+    case unsupportedCommand(PresetCommand)
+    public var errorDescription: String? { switch self { case .invalidPlan: "The deployment plan is invalid."; case let .unsupportedCommand(command): "The preset command is not supported: \(command.rawValue)." } }
+}
+
+public actor DeploymentCoordinator {
+    private let jobs: SupervisorJobStore
+    private var processes: [UUID: ProcessSupervisor] = [:]
+    public init(jobs: SupervisorJobStore = SupervisorJobStore()) { self.jobs = jobs }
+    public func submit(_ plan: DeploymentPlan) async -> UUID {
+        let process = ProcessSupervisor(); processes[plan.id] = process
+        let job = SupervisorJob(id: plan.id, kind: "deployment")
+        return await jobs.submit(job) { [weak process] update in
+            guard let process else { throw DeploymentPlanError.invalidPlan }
+            update(.queued, 0, "Queued")
+            for (index, command) in plan.installCommands.enumerated() {
+                update(.installingDependencies, Double(index) / Double(max(plan.installCommands.count, 1)), "Installing \(command.rawValue)")
+                try await process.run(command, workspace: plan.workspace) { _ in }
+            }
+            if let build = plan.buildCommand {
+                update(.building, 0.6, "Building")
+                try await process.run(build, workspace: plan.workspace) { _ in }
+            }
+            update(.starting, 0.85, "Starting")
+            try await process.start(plan.runCommand, workspace: plan.workspace) { _ in }
+            update(.running, 0.9, "Running on 127.0.0.1:\(plan.localPort)")
+            while await process.running { try await Task.sleep(for: .milliseconds(250)) }
+            try Task.checkCancellation()
+        }
+    }
+    public func cancel(_ id: UUID) async { await jobs.cancel(id); await processes[id]?.cancel() }
+    public func states() async -> [SupervisorTaskState] { await jobs.allStates() }
+}

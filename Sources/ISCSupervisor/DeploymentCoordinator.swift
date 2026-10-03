@@ -67,7 +67,8 @@ public actor DeploymentCoordinator {
                 let archive = runtimeRoot.appendingPathComponent(".downloads", isDirectory: true).appendingPathComponent(artifact.archiveName)
                 _ = try await RuntimeDownloader().download(artifact, to: archive)
                 update(.downloadingRuntime, 0.25, "Installing \(artifact.runtime) \(artifact.version)")
-                _ = try RuntimeInstaller().install(artifact, archive: archive, to: runtimeRoot)
+                let installed = try RuntimeInstaller().install(artifact, archive: archive, to: runtimeRoot)
+                await process.setToolchainRoot(installed)
             }
             for (index, command) in plan.installCommands.enumerated() {
                 update(.installingDependencies, Double(index) / Double(max(plan.installCommands.count, 1)), "Installing \(command.rawValue)")

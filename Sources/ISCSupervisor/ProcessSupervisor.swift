@@ -57,14 +57,16 @@ public protocol ProcessSupervising: Sendable {
 
 public actor ProcessSupervisor: ProcessSupervising {
     private var process: Process?
-    public init() {}
+    private var toolchainRoot: URL?
+    public init(toolchainRoot: URL? = nil) { self.toolchainRoot = toolchainRoot }
+    public func setToolchainRoot(_ root: URL?) { toolchainRoot = root }
     nonisolated public func preview(_ command: PresetCommand, workspace: URL) -> ProcessCommandPreview { ProcessCommandPreview(preset: command, workingDirectory: workspace) }
     public func run(_ command: PresetCommand, workspace: URL, output: (@Sendable (String) -> Void)? = nil) async throws {
         guard process == nil else { throw ProcessSupervisorError.alreadyRunning }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: workspace.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw ProcessSupervisorError.invalidWorkspace }
         let preview = ProcessCommandPreview(preset: command, workingDirectory: workspace)
-        let executableURL = try Self.resolve(preview.executable)
+        let executableURL = try resolve(preview.executable)
         let child = Process(); child.executableURL = executableURL; child.arguments = preview.arguments; child.currentDirectoryURL = workspace
         let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe; child.standardInput = FileHandle.nullDevice
         process = child
@@ -85,7 +87,7 @@ public actor ProcessSupervisor: ProcessSupervising {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: workspace.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw ProcessSupervisorError.invalidWorkspace }
         let preview = ProcessCommandPreview(preset: command, workingDirectory: workspace)
-        let child = Process(); child.executableURL = try Self.resolve(preview.executable); child.arguments = preview.arguments; child.currentDirectoryURL = workspace
+        let child = Process(); child.executableURL = try resolve(preview.executable); child.arguments = preview.arguments; child.currentDirectoryURL = workspace
         let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe; child.standardInput = FileHandle.nullDevice
         if let output { pipe.fileHandleForReading.readabilityHandler = { handle in if let text = String(data: handle.availableData, encoding: .utf8), !text.isEmpty { output(text) } } }
         try child.run(); process = child
@@ -98,5 +100,11 @@ public actor ProcessSupervisor: ProcessSupervising {
         process = nil
     }
     public func cancel() async { process?.terminate() }
-    private static func resolve(_ executable: String) throws -> URL { let paths = ["/usr/bin/\(executable)", "/opt/homebrew/bin/\(executable)", "/usr/local/bin/\(executable)"]; guard let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { throw ProcessSupervisorError.executableNotFound(executable) }; return URL(fileURLWithPath: path) }
+    private func resolve(_ executable: String) throws -> URL {
+        var paths: [String] = []
+        if let toolchainRoot { paths += [toolchainRoot.appendingPathComponent("bin/\(executable)").path, toolchainRoot.appendingPathComponent(executable).path] }
+        paths += ["/usr/bin/\(executable)", "/opt/homebrew/bin/\(executable)", "/usr/local/bin/\(executable)"]
+        guard let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { throw ProcessSupervisorError.executableNotFound(executable) }
+        return URL(fileURLWithPath: path)
+    }
 }

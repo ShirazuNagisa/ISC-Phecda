@@ -51,7 +51,8 @@ struct MainView: View {
                 else if section == "services" { PhecdaProjectView(model: model) }
                 else if section == "create" { PhecdaProjectView(model: model, createImmediately: true) }
                 else if section == "settings" { SettingsView(model: model) }
-                else { BusinessView(model: model, section: section ?? "credentials") }
+                else if section == "tasks" { SupervisorTasksView(model: model) }
+                 else { BusinessView(model: model, section: section ?? "credentials") }
             }
             .navigationTitle(NavigationSection.all.first { $0.id == section }?.title ?? "ISC Phecda")
             .toolbar {

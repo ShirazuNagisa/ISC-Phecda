@@ -32,7 +32,7 @@ public actor DockerSupervisor {
     }
 
     @discardableResult
-    public func start(source: DockerSourcePlan, name: String, ports: [Int] = [], policy: DockerPolicy = .init(), output: (@Sendable (String) -> Void)? = nil) async throws -> DockerCommandPlan {
+    public func start(source: DockerSourcePlan, name: String, ports: [Int] = [], policy: DockerPolicy = .init(), waitForReady: Bool = false, output: (@Sendable (String) -> Void)? = nil) async throws -> DockerCommandPlan {
         let plan = try planner.plan(source: source, name: name, ports: ports, policy: policy)
         switch source {
         case .dockerfile:
@@ -42,6 +42,7 @@ public actor DockerSupervisor {
         default:
             try await run(arguments: plan.arguments, output: output)
         }
+        if waitForReady, case .compose = source {} else if waitForReady { _ = try await waitUntilReady(name: name) }
         activeNames.insert(name)
         activeSources[name] = source
         return plan

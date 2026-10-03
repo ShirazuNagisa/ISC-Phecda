@@ -153,7 +153,7 @@ struct PhecdaProjectDetail: View {
                     }
                     let plan = try await model.dockerSupervisor.plan(source: source, name: project["name"].string, ports: [localPort])
                     deploymentMessage = plan.display
-                    _ = try await model.dockerSupervisor.start(source: source, name: project["name"].string, ports: [localPort])
+                    _ = try await model.dockerSupervisor.start(source: source, name: project["name"].string, ports: [localPort], waitForReady: true)
                 } else {
                     guard mode == "directory" else { throw DeploymentPlanError.invalidPlan }
                     let workspace = URL(fileURLWithPath: value, isDirectory: true)

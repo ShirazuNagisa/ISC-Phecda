@@ -86,8 +86,8 @@ public actor SupervisorService {
         let manifestStore = try RuntimeManifestStore(location: stateDirectory.appendingPathComponent("runtime-manifest.json"))
         self.jobs = jobs
         self.ledger = ledger
-        self.coordinator = DeploymentCoordinator(jobs: jobs, ledger: ledger)
         self.manifestStore = manifestStore
+        self.coordinator = DeploymentCoordinator(jobs: jobs, ledger: ledger, manifestStore: manifestStore)
     }
 
     public func handleLine(_ data: Data) async -> SupervisorServiceResponse {
@@ -118,7 +118,7 @@ public actor SupervisorService {
                     return failure(request.requestID, "invalid_request", "submit requires a plan.")
                 }
                 // Synthesized Codable bypasses validating initializers; revalidate before execution.
-                let validated = try DeploymentPlan(id: plan.id, workspace: plan.workspace, installCommands: plan.installCommands, buildCommand: plan.buildCommand, runCommand: plan.runCommand, localPort: plan.localPort, runtimeArtifact: plan.runtimeArtifact, runtimeRoot: plan.runtimeRoot)
+                let validated = try DeploymentPlan(id: plan.id, workspace: plan.workspace, installCommands: plan.installCommands, buildCommand: plan.buildCommand, runCommand: plan.runCommand, localPort: plan.localPort, runtimeArtifact: plan.runtimeArtifact, runtimeRoot: plan.runtimeRoot, runtime: plan.runtime, runtimeVersion: plan.runtimeVersion, releaseRoot: plan.releaseRoot)
                 if let artifact = plan.runtimeArtifact {
                     _ = try RuntimeArtifact(id: artifact.id, runtime: artifact.runtime, version: artifact.version, url: artifact.url, sha256: artifact.sha256, size: artifact.size, archiveName: artifact.archiveName)
                     guard artifact.url.scheme == "https", let root = plan.runtimeRoot, root.isFileURL,

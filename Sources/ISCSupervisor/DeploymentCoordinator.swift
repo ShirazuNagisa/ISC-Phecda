@@ -9,12 +9,22 @@ public struct DeploymentPlan: Codable, Sendable, Equatable, Identifiable {
     public let localPort: Int
     public let runtimeArtifact: RuntimeArtifact?
     public let runtimeRoot: URL?
+    public let runtime: String?
+    public let runtimeVersion: String?
     public let releaseRoot: URL?
-    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil, releaseRoot: URL? = nil) throws {
+    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil, runtime: String? = nil, runtimeVersion: String? = nil, releaseRoot: URL? = nil) throws {
         let sourcePath = URL(fileURLWithPath: workspace.standardizedFileURL.path).path
         let releasePath = releaseRoot.map { URL(fileURLWithPath: $0.standardizedFileURL.path).path }
-        guard workspace.isFileURL, workspace.path.hasPrefix("/"), (1...65535).contains(localPort), (runtimeArtifact == nil) == (runtimeRoot == nil), releaseRoot.map({ $0.isFileURL && $0.path.hasPrefix("/") }) ?? true, releasePath.map({ $0 != sourcePath && !$0.hasPrefix(sourcePath + "/") }) ?? true else { throw DeploymentPlanError.invalidPlan }
-        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot; self.releaseRoot = releaseRoot
+        guard workspace.isFileURL,
+              workspace.path.hasPrefix("/"),
+              (1...65535).contains(localPort),
+              runtimeArtifact == nil || runtimeRoot != nil,
+              runtime == nil || runtimeRoot != nil,
+              runtime.map({ !$0.isEmpty && !$0.contains("/") }) ?? true,
+              runtimeVersion.map({ !$0.isEmpty && !$0.contains("/") }) ?? true,
+              releaseRoot.map({ $0.isFileURL && $0.path.hasPrefix("/") }) ?? true,
+              releasePath.map({ $0 != sourcePath && !$0.hasPrefix(sourcePath + "/") }) ?? true else { throw DeploymentPlanError.invalidPlan }
+        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot; self.runtime = runtime; self.runtimeVersion = runtimeVersion; self.releaseRoot = releaseRoot
     }
     public var previews: [ProcessCommandPreview] { installCommands.map { ProcessCommandPreview(preset: $0, workingDirectory: workspace) } + (buildCommand.map { [ProcessCommandPreview(preset: $0, workingDirectory: workspace)] } ?? []) + [ProcessCommandPreview(preset: runCommand, workingDirectory: workspace)] }
 }
@@ -28,8 +38,9 @@ public enum DeploymentPlanError: Error, LocalizedError, Sendable, Equatable {
 public actor DeploymentCoordinator {
     private let jobs: SupervisorJobStore
     private let ledger: DeploymentLedger?
+    private let manifestStore: RuntimeManifestStore?
     private var processes: [UUID: ProcessSupervisor] = [:]
-    public init(jobs: SupervisorJobStore = SupervisorJobStore(), ledger: DeploymentLedger? = nil) { self.jobs = jobs; self.ledger = ledger }
+    public init(jobs: SupervisorJobStore = SupervisorJobStore(), ledger: DeploymentLedger? = nil, manifestStore: RuntimeManifestStore? = nil) { self.jobs = jobs; self.ledger = ledger; self.manifestStore = manifestStore }
 
     /// Checkpoints a generated release directory without touching the user source.
     public func checkpoint(_ plan: DeploymentPlan, releaseDirectory: URL) async throws -> DeploymentRecord {
@@ -62,6 +73,7 @@ public actor DeploymentCoordinator {
     public func submit(_ plan: DeploymentPlan) async -> UUID {
         let process = ProcessSupervisor(); processes[plan.id] = process
         let ledger = self.ledger
+        let manifestStore = self.manifestStore
         let job = SupervisorJob(id: plan.id, kind: "deployment")
         return await jobs.submit(job) { [weak process] update in
             guard let process else { throw DeploymentPlanError.invalidPlan }
@@ -72,7 +84,17 @@ public actor DeploymentCoordinator {
                 executionWorkspace = try Self.prepareRelease(source: plan.workspace, root: releaseRoot, id: plan.id)
                 if let ledger { release = try await ledger.record(deploymentID: plan.id, sourceDirectory: plan.workspace, releaseDirectory: executionWorkspace, runCommand: plan.runCommand, localPort: plan.localPort) }
             }
-            if let artifact = plan.runtimeArtifact, let runtimeRoot = plan.runtimeRoot {
+            let selectedArtifact: RuntimeArtifact?
+            if let explicit = plan.runtimeArtifact {
+                selectedArtifact = explicit
+            } else if let runtime = plan.runtime, let manifestStore, let catalog = await manifestStore.catalog() {
+                selectedArtifact = catalog.preferred(runtime: runtime, version: plan.runtimeVersion)
+            } else {
+                selectedArtifact = nil
+            }
+            if plan.runtime != nil && selectedArtifact == nil { throw RuntimeDownloadError.invalidResponse }
+            if selectedArtifact != nil && plan.runtimeRoot == nil { throw DeploymentPlanError.invalidPlan }
+            if let artifact = selectedArtifact, let runtimeRoot = plan.runtimeRoot {
                 update(.downloadingRuntime, 0.05, "Downloading \(artifact.runtime) \(artifact.version)")
                 let archive = runtimeRoot.appendingPathComponent(".downloads", isDirectory: true).appendingPathComponent(artifact.archiveName)
                 _ = try await RuntimeDownloader().download(artifact, to: archive)

@@ -163,7 +163,7 @@ struct PhecdaProjectDetail: View {
                     case "java": commands = ([.installJavaDependencies], .buildJava, .runJava)
                     default: throw DeploymentPlanError.invalidPlan
                     }
-                    let plan = try DeploymentPlan(workspace: workspace, installCommands: commands.install, buildCommand: commands.build, runCommand: commands.run, localPort: localPort)
+                    let plan = try DeploymentPlan(workspace: workspace, installCommands: commands.install, buildCommand: commands.build, runCommand: commands.run, localPort: localPort, releaseRoot: model.dataDirectory.deletingLastPathComponent().appendingPathComponent("Deployments", isDirectory: true))
                     let taskID = try await model.submitDeployment(plan)
                     deploymentMessage = tr("部署任务已提交：\(taskID.uuidString)", "Deployment submitted: \(taskID.uuidString)")
                 }

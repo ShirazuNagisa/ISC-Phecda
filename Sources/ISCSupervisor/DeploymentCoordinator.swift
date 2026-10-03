@@ -9,9 +9,12 @@ public struct DeploymentPlan: Codable, Sendable, Equatable, Identifiable {
     public let localPort: Int
     public let runtimeArtifact: RuntimeArtifact?
     public let runtimeRoot: URL?
-    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil) throws {
-        guard workspace.isFileURL, workspace.path.hasPrefix("/"), (1...65535).contains(localPort), (runtimeArtifact == nil) == (runtimeRoot == nil) else { throw DeploymentPlanError.invalidPlan }
-        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot
+    public let releaseRoot: URL?
+    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil, releaseRoot: URL? = nil) throws {
+        let sourcePath = URL(fileURLWithPath: workspace.standardizedFileURL.path).path
+        let releasePath = releaseRoot.map { URL(fileURLWithPath: $0.standardizedFileURL.path).path }
+        guard workspace.isFileURL, workspace.path.hasPrefix("/"), (1...65535).contains(localPort), (runtimeArtifact == nil) == (runtimeRoot == nil), releaseRoot.map({ $0.isFileURL && $0.path.hasPrefix("/") }) ?? true, releasePath.map({ $0 != sourcePath && !$0.hasPrefix(sourcePath + "/") }) ?? true else { throw DeploymentPlanError.invalidPlan }
+        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot; self.releaseRoot = releaseRoot
     }
     public var previews: [ProcessCommandPreview] { installCommands.map { ProcessCommandPreview(preset: $0, workingDirectory: workspace) } + (buildCommand.map { [ProcessCommandPreview(preset: $0, workingDirectory: workspace)] } ?? []) + [ProcessCommandPreview(preset: runCommand, workingDirectory: workspace)] }
 }
@@ -58,10 +61,17 @@ public actor DeploymentCoordinator {
 
     public func submit(_ plan: DeploymentPlan) async -> UUID {
         let process = ProcessSupervisor(); processes[plan.id] = process
+        let ledger = self.ledger
         let job = SupervisorJob(id: plan.id, kind: "deployment")
         return await jobs.submit(job) { [weak process] update in
             guard let process else { throw DeploymentPlanError.invalidPlan }
             update(.queued, 0, "Queued")
+            var executionWorkspace = plan.workspace
+            var release: DeploymentRecord?
+            if let releaseRoot = plan.releaseRoot {
+                executionWorkspace = try Self.prepareRelease(source: plan.workspace, root: releaseRoot, id: plan.id)
+                if let ledger { release = try await ledger.record(deploymentID: plan.id, sourceDirectory: plan.workspace, releaseDirectory: executionWorkspace, runCommand: plan.runCommand, localPort: plan.localPort) }
+            }
             if let artifact = plan.runtimeArtifact, let runtimeRoot = plan.runtimeRoot {
                 update(.downloadingRuntime, 0.05, "Downloading \(artifact.runtime) \(artifact.version)")
                 let archive = runtimeRoot.appendingPathComponent(".downloads", isDirectory: true).appendingPathComponent(artifact.archiveName)
@@ -72,19 +82,44 @@ public actor DeploymentCoordinator {
             }
             for (index, command) in plan.installCommands.enumerated() {
                 update(.installingDependencies, Double(index) / Double(max(plan.installCommands.count, 1)), "Installing \(command.rawValue)")
-                try await process.run(command, workspace: plan.workspace) { _ in }
+                try await process.run(command, workspace: executionWorkspace) { _ in }
             }
             if let build = plan.buildCommand {
                 update(.building, 0.6, "Building")
-                try await process.run(build, workspace: plan.workspace) { _ in }
+                try await process.run(build, workspace: executionWorkspace) { _ in }
             }
+            if let release, let ledger { _ = try await ledger.activate(release.id) }
             update(.starting, 0.85, "Starting")
-            try await process.start(plan.runCommand, workspace: plan.workspace) { _ in }
+            try await process.start(plan.runCommand, workspace: executionWorkspace) { _ in }
             update(.running, 0.9, "Running on 127.0.0.1:\(plan.localPort)")
             while await process.running { try await Task.sleep(for: .milliseconds(250)) }
             try Task.checkCancellation()
         }
     }
     public func cancel(_ id: UUID) async { await jobs.cancel(id); await processes[id]?.cancel() }
-    public func states() async -> [SupervisorTaskState] { await jobs.allStates() }
+    private static func prepareRelease(source: URL, root: URL, id: UUID) throws -> URL {
+        let fileManager = FileManager.default
+        var directory: ObjCBool = false
+        guard fileManager.fileExists(atPath: source.path, isDirectory: &directory), directory.boolValue else { throw DeploymentPlanError.invalidPlan }
+        let release = root.appendingPathComponent(id.uuidString, isDirectory: true)
+        if fileManager.fileExists(atPath: release.path) { throw DeploymentPlanError.invalidPlan }
+        try fileManager.createDirectory(at: release, withIntermediateDirectories: true)
+        try copyTree(from: source, to: release, fileManager: fileManager)
+        return release
+    }
+    private static func copyTree(from source: URL, to destination: URL, fileManager: FileManager) throws {
+        let ignored: Set<String> = [".git", ".supervisor", "node_modules", "vendor", "target", "build", "dist"]
+        for item in try fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles]) {
+            if ignored.contains(item.lastPathComponent) { continue }
+            let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isSymbolicLink != true else { throw DeploymentPlanError.invalidPlan }
+            let target = destination.appendingPathComponent(item.lastPathComponent)
+            if values.isDirectory == true {
+                try fileManager.createDirectory(at: target, withIntermediateDirectories: false)
+                try copyTree(from: item, to: target, fileManager: fileManager)
+            } else {
+                try fileManager.copyItem(at: item, to: target)
+            }
+        }
+    }
 }

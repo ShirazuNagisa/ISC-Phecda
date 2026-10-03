@@ -175,6 +175,7 @@ struct PhecdaProjectDetail: View {
                 let state = runtime == "docker" ? "running" : "preparing"
                 let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
                 deploymentID = UUID(uuidString: deployment["id"].string)
+                model.monitorDeployment(deploymentIdentifier, projectID: projectID, presetID: preset["id"].string, localPort: localPort)
                 _ = try await model.fetch("/v1/phecda/deployments")
             } catch { deploymentMessage = error.localizedDescription }
         }

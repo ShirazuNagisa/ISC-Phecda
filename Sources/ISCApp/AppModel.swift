@@ -87,6 +87,23 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
         if let supervisorClient { _ = try await supervisorClient.rollback(id) }
         else { _ = try await supervisor.rollback(id) }
     }
+    func monitorDeployment(_ id: UUID, projectID: UUID, presetID: String, localPort: Int) {
+        guard let client = supervisorClient else { return }
+        Task { @MainActor in
+            while !Task.isCancelled {
+                do {
+                    guard let state = try await client.list().jobs?.first(where: { $0.id == id }) else { break }
+                    let mapped: String
+                    switch state.phase { case .building: mapped = "building"; case .running, .completed: mapped = "running"; case .stopping, .cancelled: mapped = "stopped"; case .failed: mapped = "failed"; default: mapped = "preparing" }
+                    var fields: [String: JSONValue] = ["id": .string(id.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(presetID), "state": .string(mapped), "local_port": .number(Double(localPort))]
+                    if let error = state.error { fields["last_error"] = .string(error) }
+                    _ = try await request("POST", "/v1/phecda/deployments", body: .object(fields))
+                    if [.completed, .failed, .cancelled].contains(state.phase) { break }
+                } catch { break }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
     func execute(_ operation: @escaping @MainActor () async throws -> Void) {
         Task {
             do { try await operation() }

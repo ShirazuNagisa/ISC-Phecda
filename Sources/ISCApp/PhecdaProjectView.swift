@@ -69,6 +69,7 @@ struct PhecdaProjectDetail: View {
     @State private var deploymentMessage: String?
     @State private var showDeployConfirmation = false
     @State private var showPublicBinding = false
+    @State private var deploymentID: UUID?
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 18) {
             Text(project["name"].string).font(.title.bold())
@@ -99,7 +100,7 @@ struct PhecdaProjectDetail: View {
             Text(tr("Phecda 将按预设安装依赖、构建并启动本地服务。命令来自固定 allowlist，不执行 shell。", "Phecda will install dependencies, build, and start the local service using an allowlisted command plan without a shell."))
         }
         .sheet(isPresented: $showPublicBinding) {
-            PublishWizard(model: model, initialName: project["name"].string, initialUpstream: "http://127.0.0.1:8080")
+            PublishWizard(model: model, onVerify: { service in bind(service) }, initialName: project["name"].string, initialUpstream: "http://127.0.0.1:8080")
         }
     }
     func scanProject() { busy = true; model.execute { defer { busy = false }; scan = try? await model.request("POST", "/v1/phecda/projects/\(KernelClient.pathComponent(project.id))/scan") } }
@@ -143,9 +144,19 @@ struct PhecdaProjectDetail: View {
                     deploymentMessage = tr("部署任务已提交：\(taskID.uuidString)", "Deployment submitted: \(taskID.uuidString)")
                 }
                 let state = runtime == "docker" ? "running" : "preparing"
-                _ = try await model.request("POST", "/v1/phecda/deployments", body: .object(["project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
+                let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
+                deploymentID = UUID(uuidString: deployment["id"].string)
                 _ = try await model.fetch("/v1/phecda/deployments")
             } catch { deploymentMessage = error.localizedDescription }
+        }
+    }
+    func bind(_ service: PublishedService) {
+        guard let deploymentID else { return }
+        model.execute {
+            let body: JSONValue = .object(["id": .string(deploymentID.uuidString), "project_id": .string(project.id), "preset_id": .string(selectedPreset?["id"].string ?? ""), "state": .string("running"), "public_service_id": .string(service.id.uuidString)])
+            _ = try await model.request("POST", "/v1/phecda/deployments", body: body)
+            _ = try await model.fetch("/v1/phecda/deployments")
+            deploymentMessage = tr("公网服务已关联。", "Public service binding saved.")
         }
     }
 }

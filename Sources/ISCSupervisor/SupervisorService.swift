@@ -2,21 +2,25 @@ import Foundation
 
 /// One request per JSON line. No executable paths or shell text are accepted.
 public struct SupervisorServiceRequest: Codable, Sendable, Equatable {
-    public enum Command: String, Codable, Sendable { case ping, list, submit, cancel, rollback, manifest }
+    public enum Command: String, Codable, Sendable { case ping, list, submit, cancel, rollback, manifest, dockerInspect, dockerLogs }
     public let requestID: String?
     public let command: Command
     public let plan: DeploymentPlan?
     public let deploymentID: UUID?
     public let manifestURL: URL?
     public let manifestSHA256: String?
+    public let dockerName: String?
+    public let dockerTail: Int?
 
-    public init(requestID: String? = nil, command: Command, plan: DeploymentPlan? = nil, deploymentID: UUID? = nil, manifestURL: URL? = nil, manifestSHA256: String? = nil) {
+    public init(requestID: String? = nil, command: Command, plan: DeploymentPlan? = nil, deploymentID: UUID? = nil, manifestURL: URL? = nil, manifestSHA256: String? = nil, dockerName: String? = nil, dockerTail: Int? = nil) {
         self.requestID = requestID
         self.command = command
         self.plan = plan
         self.deploymentID = deploymentID
         self.manifestURL = manifestURL
         self.manifestSHA256 = manifestSHA256
+        self.dockerName = dockerName
+        self.dockerTail = dockerTail
     }
 }
 
@@ -35,9 +39,11 @@ public struct SupervisorServiceResponse: Codable, Sendable, Equatable {
     public let ledger: DeploymentLedgerSnapshot?
     public let release: DeploymentRecord?
     public let manifest: RuntimeManifest?
+    public let dockerInspection: DockerContainerInspection?
+    public let dockerLogs: String?
     public let error: SupervisorServiceError?
 
-    public init(requestID: String? = nil, deploymentID: UUID? = nil, jobs: [SupervisorTaskState]? = nil, ledger: DeploymentLedgerSnapshot? = nil, release: DeploymentRecord? = nil, manifest: RuntimeManifest? = nil, error: SupervisorServiceError? = nil) {
+    public init(requestID: String? = nil, deploymentID: UUID? = nil, jobs: [SupervisorTaskState]? = nil, ledger: DeploymentLedgerSnapshot? = nil, release: DeploymentRecord? = nil, manifest: RuntimeManifest? = nil, dockerInspection: DockerContainerInspection? = nil, dockerLogs: String? = nil, error: SupervisorServiceError? = nil) {
         self.protocolVersion = 1
         self.requestID = requestID
         self.ok = error == nil
@@ -46,6 +52,8 @@ public struct SupervisorServiceResponse: Codable, Sendable, Equatable {
         self.ledger = ledger
         self.release = release
         self.manifest = manifest
+        self.dockerInspection = dockerInspection
+        self.dockerLogs = dockerLogs
         self.error = error
     }
 }
@@ -75,6 +83,7 @@ public actor SupervisorService {
     private let ledger: DeploymentLedger
     private let coordinator: DeploymentCoordinator
     private let manifestStore: RuntimeManifestStore
+    private let docker: DockerSupervisor
     private var submittedIDs: Set<UUID> = []
 
     public init(stateDirectory: URL) throws {
@@ -87,6 +96,7 @@ public actor SupervisorService {
         self.jobs = jobs
         self.ledger = ledger
         self.manifestStore = manifestStore
+        self.docker = DockerSupervisor()
         self.coordinator = DeploymentCoordinator(jobs: jobs, ledger: ledger, manifestStore: manifestStore)
     }
 
@@ -113,6 +123,12 @@ public actor SupervisorService {
                     try await manifestStore.refresh(url: url, expectedSHA256: checksum)
                 }
                 return SupervisorServiceResponse(requestID: request.requestID, manifest: await manifestStore.manifest())
+            case .dockerInspect:
+                guard let name = request.dockerName else { return failure(request.requestID, "invalid_request", "dockerName is required.") }
+                return SupervisorServiceResponse(requestID: request.requestID, dockerInspection: try await docker.inspect(name: name))
+            case .dockerLogs:
+                guard let name = request.dockerName else { return failure(request.requestID, "invalid_request", "dockerName is required.") }
+                return SupervisorServiceResponse(requestID: request.requestID, dockerLogs: try await docker.logs(name: name, tail: request.dockerTail ?? 200))
             case .submit:
                 guard let plan = request.plan else {
                     return failure(request.requestID, "invalid_request", "submit requires a plan.")

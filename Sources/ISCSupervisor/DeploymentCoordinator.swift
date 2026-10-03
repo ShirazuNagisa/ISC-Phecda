@@ -7,9 +7,11 @@ public struct DeploymentPlan: Codable, Sendable, Equatable, Identifiable {
     public let buildCommand: PresetCommand?
     public let runCommand: PresetCommand
     public let localPort: Int
-    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int) throws {
-        guard workspace.isFileURL, workspace.path.hasPrefix("/"), (1...65535).contains(localPort) else { throw DeploymentPlanError.invalidPlan }
-        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort
+    public let runtimeArtifact: RuntimeArtifact?
+    public let runtimeRoot: URL?
+    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil) throws {
+        guard workspace.isFileURL, workspace.path.hasPrefix("/"), (1...65535).contains(localPort), (runtimeArtifact == nil) == (runtimeRoot == nil) else { throw DeploymentPlanError.invalidPlan }
+        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot
     }
     public var previews: [ProcessCommandPreview] { installCommands.map { ProcessCommandPreview(preset: $0, workingDirectory: workspace) } + (buildCommand.map { [ProcessCommandPreview(preset: $0, workingDirectory: workspace)] } ?? []) + [ProcessCommandPreview(preset: runCommand, workingDirectory: workspace)] }
 }
@@ -60,6 +62,13 @@ public actor DeploymentCoordinator {
         return await jobs.submit(job) { [weak process] update in
             guard let process else { throw DeploymentPlanError.invalidPlan }
             update(.queued, 0, "Queued")
+            if let artifact = plan.runtimeArtifact, let runtimeRoot = plan.runtimeRoot {
+                update(.downloadingRuntime, 0.05, "Downloading \(artifact.runtime) \(artifact.version)")
+                let archive = runtimeRoot.appendingPathComponent(".downloads", isDirectory: true).appendingPathComponent(artifact.archiveName)
+                _ = try await RuntimeDownloader().download(artifact, to: archive)
+                update(.downloadingRuntime, 0.25, "Installing \(artifact.runtime) \(artifact.version)")
+                _ = try RuntimeInstaller().install(artifact, archive: archive, to: runtimeRoot)
+            }
             for (index, command) in plan.installCommands.enumerated() {
                 update(.installingDependencies, Double(index) / Double(max(plan.installCommands.count, 1)), "Installing \(command.rawValue)")
                 try await process.run(command, workspace: plan.workspace) { _ in }

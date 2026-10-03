@@ -34,7 +34,16 @@ public actor DockerSupervisor {
     private let planner: DockerPlanner
     private var activeNames: Set<String> = []
     private var activeSources: [String: DockerSourcePlan] = [:]
-    public init(planner: DockerPlanner = DockerPlanner()) { self.planner = planner }
+    private let stateLocation: URL?
+    public init(planner: DockerPlanner = DockerPlanner()) { self.planner = planner; self.stateLocation = nil }
+    public init(planner: DockerPlanner = DockerPlanner(), stateLocation: URL) throws {
+        guard stateLocation.isFileURL, stateLocation.path.hasPrefix("/") else { throw DockerSupervisorError.invalidPlan }
+        self.planner = planner; self.stateLocation = stateLocation
+        if let data = try? Data(contentsOf: stateLocation), !data.isEmpty {
+            self.activeSources = try JSONDecoder().decode([String: DockerSourcePlan].self, from: data)
+            self.activeNames = Set(self.activeSources.keys)
+        }
+    }
 
     public func plan(source: DockerSourcePlan, name: String, ports: [Int] = [], policy: DockerPolicy = .init()) throws -> DockerCommandPlan {
         try planner.plan(source: source, name: name, ports: ports, policy: policy)
@@ -66,6 +75,7 @@ public actor DockerSupervisor {
         }
         activeNames.insert(name)
         activeSources[name] = source
+        persistState()
         return plan
     }
 
@@ -81,6 +91,7 @@ public actor DockerSupervisor {
         }
         activeNames.remove(name)
         activeSources[name] = nil
+        persistState()
     }
 
     public func inspect(name: String) async throws -> DockerContainerInspection {
@@ -155,6 +166,18 @@ public actor DockerSupervisor {
 
     public func isActive(_ name: String) -> Bool { activeNames.contains(name) }
 
+    private func persistState() {
+        guard let stateLocation else { return }
+        do {
+            let data = try JSONEncoder().encode(activeSources)
+            try FileManager.default.createDirectory(at: stateLocation.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let temporary = stateLocation.deletingLastPathComponent().appendingPathComponent(".\(stateLocation.lastPathComponent).\(UUID().uuidString).tmp")
+            defer { try? FileManager.default.removeItem(at: temporary) }
+            try data.write(to: temporary, options: .atomic)
+            if FileManager.default.fileExists(atPath: stateLocation.path) { _ = try FileManager.default.replaceItemAt(stateLocation, withItemAt: temporary) }
+            else { try FileManager.default.moveItem(at: temporary, to: stateLocation) }
+        } catch { }
+    }
     private static func validateComposeFile(_ file: URL) throws {
         let forbidden = CharacterSet(charactersIn: ";&|$`<>(){}[]*?!~\"'\\#").union(.controlCharacters)
         guard file.isFileURL, file.path.hasPrefix("/"), !file.path.hasSuffix("/"), file.path.rangeOfCharacter(from: forbidden) == nil else { throw DockerSupervisorError.invalidPlan }

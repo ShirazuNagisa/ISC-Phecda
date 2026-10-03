@@ -104,7 +104,7 @@ public actor SupervisorService {
         self.jobs = jobs
         self.ledger = ledger
         self.manifestStore = manifestStore
-        self.docker = DockerSupervisor()
+        self.docker = try DockerSupervisor(stateLocation: stateDirectory.appendingPathComponent("docker-sources.json"))
         self.coordinator = DeploymentCoordinator(jobs: jobs, ledger: ledger, manifestStore: manifestStore)
     }
 

@@ -52,6 +52,21 @@ public struct RuntimeManifest: Codable, Sendable, Equatable {
     public init(schemaVersion: Int = 1, artifacts: [RuntimeArtifact]) { self.schemaVersion = schemaVersion; self.artifacts = artifacts }
 }
 
+public struct RuntimeCatalog: Sendable {
+    public let manifest: RuntimeManifest
+    public init(manifest: RuntimeManifest) { self.manifest = manifest }
+    public init(json: Data, decoder: JSONDecoder = JSONDecoder()) throws {
+        self.manifest = try decoder.decode(RuntimeManifest.self, from: json)
+    }
+    public func artifact(runtime: String, version: String) -> RuntimeArtifact? {
+        manifest.artifacts.first { $0.runtime == runtime && $0.version == version }
+    }
+    public func download(runtime: String, version: String, to destination: URL, using downloader: RuntimeDownloader = RuntimeDownloader()) async throws -> URL {
+        guard let artifact = artifact(runtime: runtime, version: version) else { throw RuntimeDownloadError.invalidResponse }
+        return try await downloader.download(artifact, to: destination)
+    }
+}
+
 public enum RuntimeDownloadError: Error, LocalizedError, Sendable, Equatable {
     case invalidChecksum, checksumMismatch(expected: String, actual: String), invalidResponse, cancelled, destinationExists
     public var errorDescription: String? {

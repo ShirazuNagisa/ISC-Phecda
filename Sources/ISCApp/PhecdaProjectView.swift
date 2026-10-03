@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import ISCCore
+import ISCSupervisor
 
 struct PhecdaProjectView: View {
     let model: AppModel
@@ -63,6 +64,10 @@ struct PhecdaProjectDetail: View {
     let project: JSONValue
     @State private var scan: JSONValue?
     @State private var busy = false
+    @State private var selectedPreset: JSONValue?
+    @State private var deploying = false
+    @State private var deploymentMessage: String?
+    @State private var showDeployConfirmation = false
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 18) {
             Text(project["name"].string).font(.title.bold())
@@ -70,9 +75,72 @@ struct PhecdaProjectDetail: View {
             LabeledContent(tr("来源模式", "Source mode"), value: project["source"]["mode"].string)
             Text(project["source"]["value"].string).font(.caption.monospaced()).textSelection(.enabled)
             HStack { Button(tr("只读扫描", "Read-only scan")) { scanProject() }.buttonStyle(.borderedProminent).disabled(busy || !model.running); if busy { ProgressView().controlSize(.small) } }
-            if let scan { Text(tr("扫描证据", "Scan evidence")).font(.headline); ForEach(scan["evidence"].array, id: \.id) { evidence in Label(evidence["file"].string + " · " + evidence["signal"].string, systemImage: "doc.text.magnifyingglass") }; Text(tr("候选预设", "Candidate presets")).font(.headline); ForEach(scan["candidates"].array, id: \.id) { preset in Text(preset["title"].string + " · " + preset["runtime"].string) }; if !scan["warning"].string.isEmpty { Text(scan["warning"].string).foregroundStyle(.orange) } }
+            if let scan {
+                Text(tr("扫描证据", "Scan evidence")).font(.headline)
+                ForEach(scan["evidence"].array, id: \.id) { evidence in Label(evidence["file"].string + " · " + evidence["signal"].string, systemImage: "doc.text.magnifyingglass") }
+                Text(tr("候选预设", "Candidate presets")).font(.headline)
+                ForEach(scan["candidates"].array, id: \.id) { preset in
+                    Button { selectedPreset = preset } label: { HStack { Image(systemName: selectedPreset?.id == preset.id ? "checkmark.circle.fill" : "circle"); Text(preset["title"].string); Spacer(); Text(preset["runtime"].string).foregroundStyle(.secondary) } }.buttonStyle(.plain)
+                }
+                if selectedPreset != nil {
+                    Button(tr("预览并部署", "Preview and deploy")) { showDeployConfirmation = true }.buttonStyle(.borderedProminent).disabled(deploying)
+                }
+                if let deploymentMessage { Text(deploymentMessage).foregroundStyle(.secondary).textSelection(.enabled) }
+                if !scan["warning"].string.isEmpty { Text(scan["warning"].string).foregroundStyle(.orange) }
+            }
             Text(tr("扫描阶段不会安装运行时、执行依赖命令、启动容器或修改 DNS。", "Scanning does not install runtimes, run dependency commands, start containers, or change DNS.")).foregroundStyle(.secondary)
         }.padding(28).frame(maxWidth: 760, alignment: .leading) }
+        .confirmationDialog(tr("确认部署？", "Confirm deployment?"), isPresented: $showDeployConfirmation) {
+            Button(tr("执行预设部署", "Run preset deployment")) { if let selectedPreset { deploy(preset: selectedPreset) } }
+            Button(tr("取消", "Cancel"), role: .cancel) { }
+        } message: {
+            Text(tr("Phecda 将按预设安装依赖、构建并启动本地服务。命令来自固定 allowlist，不执行 shell。", "Phecda will install dependencies, build, and start the local service using an allowlisted command plan without a shell."))
+        }
     }
     func scanProject() { busy = true; model.execute { defer { busy = false }; scan = try? await model.request("POST", "/v1/phecda/projects/\(KernelClient.pathComponent(project.id))/scan") } }
+    func deploy(preset: JSONValue) {
+        deploying = true
+        let runtime = preset["runtime"].string
+        let projectID = UUID(uuidString: project.id)
+        model.execute {
+            defer { deploying = false }
+            guard let projectID else { deploymentMessage = tr("项目 ID 无效。", "The project ID is invalid."); return }
+            do {
+                let mode = project["source"]["mode"].string
+                let value = project["source"]["value"].string
+                let localPort = Int(preset["default_port"].number)
+                if runtime == "docker" {
+                    let source: DockerSourcePlan
+                    switch mode {
+                    case "composeFile": source = .compose(file: URL(fileURLWithPath: value))
+                    case "dockerfileDirectory": source = .dockerfile(directory: URL(fileURLWithPath: value))
+                    case "image": source = .image(reference: value)
+                    default: throw DockerPlanError.invalidArgument
+                    }
+                    let plan = try await model.dockerSupervisor.plan(source: source, name: project["name"].string, ports: [localPort])
+                    deploymentMessage = plan.display
+                    _ = try await model.dockerSupervisor.start(source: source, name: project["name"].string, ports: [localPort])
+                } else {
+                    guard mode == "directory" else { throw DeploymentPlanError.invalidPlan }
+                    let workspace = URL(fileURLWithPath: value, isDirectory: true)
+                    let commands: (install: [PresetCommand], build: PresetCommand?, run: PresetCommand)
+                    switch runtime {
+                    case "staticFiles": commands = ([], nil, .serveStatic)
+                    case "node": commands = ([.installNodeDependencies], .buildNode, .runNode)
+                    case "python": commands = ([.installPythonDependencies], .buildPython, .runPython)
+                    case "php": commands = ([.installPHPDependencies], .buildPHP, .runPHP)
+                    case "go": commands = ([.installGoDependencies], .buildGo, .runGo)
+                    case "java": commands = ([.installJavaDependencies], .buildJava, .runJava)
+                    default: throw DeploymentPlanError.invalidPlan
+                    }
+                    let plan = try DeploymentPlan(workspace: workspace, installCommands: commands.install, buildCommand: commands.build, runCommand: commands.run, localPort: localPort)
+                    let taskID = await model.supervisor.submit(plan)
+                    deploymentMessage = tr("部署任务已提交：\(taskID.uuidString)", "Deployment submitted: \(taskID.uuidString)")
+                }
+                let state = runtime == "docker" ? "running" : "preparing"
+                _ = try await model.request("POST", "/v1/phecda/deployments", body: .object(["project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
+                _ = try await model.fetch("/v1/phecda/deployments")
+            } catch { deploymentMessage = error.localizedDescription }
+        }
+    }
 }

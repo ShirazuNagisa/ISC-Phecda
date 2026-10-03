@@ -78,10 +78,10 @@ public actor DeploymentLedger {
     private var document: Document
 
     public init(root: URL, fileManager: FileManager = .default) throws {
-        self.root = root.standardizedFileURL
+        self.root = URL(fileURLWithPath: root.standardizedFileURL.path)
         self.fileManager = fileManager
-        self.ledgerURL = root.appendingPathComponent("deployment-ledger.json")
-        self.pointerURL = root.appendingPathComponent("current-release")
+        self.ledgerURL = self.root.appendingPathComponent("deployment-ledger.json")
+        self.pointerURL = self.root.appendingPathComponent("current-release")
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: ledgerURL), !data.isEmpty {
             self.document = try JSONDecoder.deploymentLedger.decode(Document.self, from: data)
@@ -125,8 +125,8 @@ public actor DeploymentLedger {
         let result = DeploymentRecord(
             deploymentID: deploymentID,
             version: nextVersion,
-            sourceDirectory: source,
-            releaseDirectory: release,
+            sourceDirectory: sourceDirectory,
+            releaseDirectory: releaseDirectory,
             runCommand: runCommand,
             localPort: localPort,
             createdAt: createdAt,

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ISCCore
+import ISCSupervisor
 import UserNotifications
 
 func tr(_ zh: String, _ en: String) -> String {
@@ -11,6 +12,8 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
 
 @Observable final class AppModel {
     let kernel = KernelClient()
+    let supervisor = DeploymentCoordinator()
+    let dockerSupervisor = DockerSupervisor()
     var phase: KernelPhase = .stopped
     var services: [PublishedService] = []
     var datasets: [String: JSONValue] = [:]

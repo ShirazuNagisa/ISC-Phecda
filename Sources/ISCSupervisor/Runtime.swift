@@ -169,7 +169,7 @@ public struct RuntimeInstaller: Sendable {
     }
 
     private static func validateListedPaths(_ output: String) throws {
-        for path in output.split(separator: "\n", omittingEmptySubsequences: false) { try validatePath(String(path)) }
+        for path in output.split(separator: "\n", omittingEmptySubsequences: true) { try validatePath(String(path)) }
     }
 
     private static func validateTree(_ root: URL, fileManager: FileManager) throws {

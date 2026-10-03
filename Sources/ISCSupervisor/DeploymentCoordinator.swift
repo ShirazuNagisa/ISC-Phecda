@@ -77,7 +77,7 @@ public actor DeploymentCoordinator {
         let job = SupervisorJob(id: plan.id, kind: "deployment")
         return await jobs.submit(job) { [weak process] update in
             guard let process else { throw DeploymentPlanError.invalidPlan }
-            update(.queued, 0, "Queued")
+            await update(.queued, 0, "Queued")
             var executionWorkspace = plan.workspace
             var release: DeploymentRecord?
             if let releaseRoot = plan.releaseRoot {
@@ -95,25 +95,25 @@ public actor DeploymentCoordinator {
             if plan.runtime != nil && selectedArtifact == nil { throw RuntimeDownloadError.invalidResponse }
             if selectedArtifact != nil && plan.runtimeRoot == nil { throw DeploymentPlanError.invalidPlan }
             if let artifact = selectedArtifact, let runtimeRoot = plan.runtimeRoot {
-                update(.downloadingRuntime, 0.05, "Downloading \(artifact.runtime) \(artifact.version)")
+                await update(.downloadingRuntime, 0.05, "Downloading \(artifact.runtime) \(artifact.version)")
                 let archive = runtimeRoot.appendingPathComponent(".downloads", isDirectory: true).appendingPathComponent(artifact.archiveName)
                 _ = try await RuntimeDownloader().download(artifact, to: archive)
-                update(.downloadingRuntime, 0.25, "Installing \(artifact.runtime) \(artifact.version)")
+                await update(.downloadingRuntime, 0.25, "Installing \(artifact.runtime) \(artifact.version)")
                 let installed = try RuntimeInstaller().install(artifact, archive: archive, to: runtimeRoot)
                 await process.setToolchainRoot(installed)
             }
             for (index, command) in plan.installCommands.enumerated() {
-                update(.installingDependencies, Double(index) / Double(max(plan.installCommands.count, 1)), "Installing \(command.rawValue)")
+                await update(.installingDependencies, Double(index) / Double(max(plan.installCommands.count, 1)), "Installing \(command.rawValue)")
                 try await process.run(command, workspace: executionWorkspace) { _ in }
             }
             if let build = plan.buildCommand {
-                update(.building, 0.6, "Building")
+                await update(.building, 0.6, "Building")
                 try await process.run(build, workspace: executionWorkspace) { _ in }
             }
             if let release, let ledger { _ = try await ledger.activate(release.id) }
-            update(.starting, 0.85, "Starting")
+            await update(.starting, 0.85, "Starting")
             try await process.start(plan.runCommand, workspace: executionWorkspace) { _ in }
-            update(.running, 0.9, "Running on 127.0.0.1:\(plan.localPort)")
+            await update(.running, 0.9, "Running on 127.0.0.1:\(plan.localPort)")
             while await process.running { try await Task.sleep(for: .milliseconds(250)) }
             try Task.checkCancellation()
         }

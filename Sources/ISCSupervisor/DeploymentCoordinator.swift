@@ -22,8 +22,38 @@ public enum DeploymentPlanError: Error, LocalizedError, Sendable, Equatable {
 
 public actor DeploymentCoordinator {
     private let jobs: SupervisorJobStore
+    private let ledger: DeploymentLedger?
     private var processes: [UUID: ProcessSupervisor] = [:]
-    public init(jobs: SupervisorJobStore = SupervisorJobStore()) { self.jobs = jobs }
+    public init(jobs: SupervisorJobStore = SupervisorJobStore(), ledger: DeploymentLedger? = nil) { self.jobs = jobs; self.ledger = ledger }
+
+    /// Checkpoints a generated release directory without touching the user source.
+    public func checkpoint(_ plan: DeploymentPlan, releaseDirectory: URL) async throws -> DeploymentRecord {
+        guard let ledger else { throw DeploymentLedgerError.persistenceFailed }
+        return try await ledger.record(
+            deploymentID: plan.id,
+            sourceDirectory: plan.workspace,
+            releaseDirectory: releaseDirectory,
+            runCommand: plan.runCommand,
+            localPort: plan.localPort
+        )
+    }
+
+    public func activateRelease(_ releaseID: UUID) async throws -> DeploymentRecord {
+        guard let ledger else { throw DeploymentLedgerError.persistenceFailed }
+        return try await ledger.activate(releaseID)
+    }
+
+    /// Stops the managed process before switching the pointer and restarting the prior release.
+    public func rollback(_ deploymentID: UUID) async throws -> DeploymentRecord {
+        guard let ledger, let process = processes[deploymentID] else {
+            throw DeploymentLedgerError.noPreviousRelease(deploymentID)
+        }
+        if await process.running { try await process.stop() }
+        let record = try await ledger.rollback(deploymentID: deploymentID)
+        try await process.start(record.runCommand, workspace: record.releaseDirectory) { _ in }
+        return record
+    }
+
     public func submit(_ plan: DeploymentPlan) async -> UUID {
         let process = ProcessSupervisor(); processes[plan.id] = process
         let job = SupervisorJob(id: plan.id, kind: "deployment")

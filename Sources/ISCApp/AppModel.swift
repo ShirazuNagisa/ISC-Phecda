@@ -28,7 +28,7 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
     private var lifecycleGeneration = 0
     let dataDirectory: URL
     let archiveURL: URL
-    static let listPaths = ["/v1/providers", "/v1/credentials", "/v1/ddns-tasks", "/v1/proxy/routes", "/v1/proxy/status", "/v1/certs", "/v1/ip/current", "/v1/jobs", "/v1/settings", "/v1/notify/channels", "/v1/notify/deliveries", "/v1/audit", "/v1/reach/providers", "/v1/changes", "/v1/changes/pending", "/v1/changes/interrupted", "/v1/verify/sessions"]
+    static let listPaths = ["/v1/providers", "/v1/credentials", "/v1/ddns-tasks", "/v1/proxy/routes", "/v1/proxy/status", "/v1/certs", "/v1/ip/current", "/v1/jobs", "/v1/settings", "/v1/notify/channels", "/v1/notify/deliveries", "/v1/audit", "/v1/reach/providers", "/v1/changes", "/v1/changes/pending", "/v1/changes/interrupted", "/v1/verify/sessions", "/v1/phecda/presets", "/v1/phecda/projects", "/v1/phecda/deployments"]
 
     init(dataDirectory: URL? = nil) {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

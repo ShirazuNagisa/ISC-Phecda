@@ -10,7 +10,8 @@ struct NavigationSection: Identifiable {
     let symbol: String
     var title: String { tr(zh, en) }
     static let all: [Self] = [
-        .init(id: "services", zh: "发布的服务", en: "Services", symbol: "server.rack"),
+        .init(id: "services", zh: "我的服务器", en: "My Servers", symbol: "server.rack"),
+        .init(id: "create", zh: "创建服务器", en: "Create Server", symbol: "plus.app"),
         .init(id: "credentials", zh: "DNS 凭据", en: "DNS Credentials", symbol: "key"),
         .init(id: "ddns", zh: "动态解析", en: "Dynamic DNS", symbol: "arrow.triangle.2.circlepath"),
         .init(id: "dns", zh: "DNS 记录", en: "DNS Records", symbol: "list.bullet.rectangle"),
@@ -47,9 +48,9 @@ struct MainView: View {
                     HStack { Label(notice, systemImage: "checkmark.circle"); Spacer(); Button { model.notice = nil } label: { Image(systemName: "xmark") }.buttonStyle(.borderless) }.padding(12).font(.callout).background(.blue.opacity(0.07))
                 }
                 if !query.isEmpty { SearchResults(model: model, query: query, chooseSection: { section = $0; query = "" }, chooseService: { selectedID = $0; section = "services"; query = "" }) }
-                else if section == "services" {
-                    ServiceListView(model: model, selectedID: $selectedID)
-                } else if section == "settings" { SettingsView(model: model) }
+                else if section == "services" { PhecdaProjectView(model: model) }
+                else if section == "create" { PhecdaProjectView(model: model, createImmediately: true) }
+                else if section == "settings" { SettingsView(model: model) }
                 else { BusinessView(model: model, section: section ?? "credentials") }
             }
             .navigationTitle(NavigationSection.all.first { $0.id == section }?.title ?? "ISC Phecda")

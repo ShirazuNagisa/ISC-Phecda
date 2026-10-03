@@ -72,6 +72,8 @@ struct PhecdaProjectDetail: View {
     @State private var deploymentID: UUID?
     @State private var composeSummary: DockerComposeSummary?
     @State private var composeError: String?
+    @State private var showManifest = false
+    @State private var runtimeManifest: RuntimeManifest?
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 18) {
             Text(project["name"].string).font(.title.bold())
@@ -92,6 +94,7 @@ struct PhecdaProjectDetail: View {
                 }
                 if let composeError { Text(composeError).foregroundStyle(.orange) }
             }
+            Button(tr("运行时清单", "Runtime manifest")) { showManifest = true }.buttonStyle(.bordered)
             HStack { Button(tr("只读扫描", "Read-only scan")) { scanProject() }.buttonStyle(.borderedProminent).disabled(busy || !model.running); if busy { ProgressView().controlSize(.small) } }
             if let scan {
                 Text(tr("扫描证据", "Scan evidence")).font(.headline)
@@ -118,6 +121,7 @@ struct PhecdaProjectDetail: View {
         .sheet(isPresented: $showPublicBinding) {
             PublishWizard(model: model, onVerify: { service in bind(service) }, initialName: project["name"].string, initialUpstream: "http://127.0.0.1:8080")
         }
+        .sheet(isPresented: $showManifest) { RuntimeManifestSheet(model: model, manifest: $runtimeManifest) }
     }
     func inspectCompose() {
         composeError = nil

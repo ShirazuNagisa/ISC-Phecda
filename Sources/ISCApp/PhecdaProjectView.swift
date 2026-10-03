@@ -70,12 +70,28 @@ struct PhecdaProjectDetail: View {
     @State private var showDeployConfirmation = false
     @State private var showPublicBinding = false
     @State private var deploymentID: UUID?
+    @State private var composeSummary: DockerComposeSummary?
+    @State private var composeError: String?
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 18) {
             Text(project["name"].string).font(.title.bold())
             LabeledContent(tr("用途", "Purpose"), value: project["purpose"].string)
             LabeledContent(tr("来源模式", "Source mode"), value: project["source"]["mode"].string)
             Text(project["source"]["value"].string).font(.caption.monospaced()).textSelection(.enabled)
+            if project["source"]["mode"].string == "composeFile" {
+                Button(tr("检查 Compose 配置", "Inspect Compose configuration")) { inspectCompose() }.buttonStyle(.bordered)
+                if let composeSummary {
+                    ForEach(composeSummary.services, id: \.name) { service in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(service.name).font(.headline)
+                            if !service.ports.isEmpty { Text(service.ports.map { "\($0.published ?? "-") → \($0.target)" }.joined(separator: ", ")).font(.caption) }
+                            if !service.volumes.isEmpty { Text(tr("卷：", "Volumes: ") + service.volumes.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+                            if !service.environmentVariableNames.isEmpty { Text(tr("环境变量名：", "Environment names: ") + service.environmentVariableNames.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
+                        }.padding(.vertical, 4)
+                    }
+                }
+                if let composeError { Text(composeError).foregroundStyle(.orange) }
+            }
             HStack { Button(tr("只读扫描", "Read-only scan")) { scanProject() }.buttonStyle(.borderedProminent).disabled(busy || !model.running); if busy { ProgressView().controlSize(.small) } }
             if let scan {
                 Text(tr("扫描证据", "Scan evidence")).font(.headline)
@@ -101,6 +117,14 @@ struct PhecdaProjectDetail: View {
         }
         .sheet(isPresented: $showPublicBinding) {
             PublishWizard(model: model, onVerify: { service in bind(service) }, initialName: project["name"].string, initialUpstream: "http://127.0.0.1:8080")
+        }
+    }
+    func inspectCompose() {
+        composeError = nil
+        let file = project["source"]["value"].string
+        model.execute {
+            do { composeSummary = try await DockerComposeInspector().inspect(file: file) }
+            catch { composeError = error.localizedDescription }
         }
     }
     func scanProject() { busy = true; model.execute { defer { busy = false }; scan = try? await model.request("POST", "/v1/phecda/projects/\(KernelClient.pathComponent(project.id))/scan") } }

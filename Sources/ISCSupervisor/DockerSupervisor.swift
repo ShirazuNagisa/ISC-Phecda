@@ -16,6 +16,15 @@ public struct DockerContainerInspection: Codable, Sendable, Equatable {
     public init(name: String, running: Bool, status: String, ports: [String] = [], health: String? = nil) { self.name = name; self.running = running; self.status = status; self.ports = ports; self.health = health }
 }
 
+public struct DockerComposeServiceInspection: Codable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let service: String
+    public let state: String
+    public let health: String?
+    public let ports: [String]
+    public init(service: String, state: String, health: String? = nil, ports: [String] = []) { self.id = service; self.service = service; self.state = state; self.health = health; self.ports = ports }
+}
+
 public enum DockerLogError: Error, LocalizedError, Sendable, Equatable {
     case invalidTail
     public var errorDescription: String? { "Docker log tail must be between 1 and 10000 lines." }
@@ -96,7 +105,38 @@ public actor DockerSupervisor {
         return String(decoding: try await runCapture(arguments: ["logs", "--tail", String(tail), name]), as: UTF8.self)
     }
 
+    public func composeStatus(file: URL) async throws -> [DockerComposeServiceInspection] {
+        try Self.validateComposeFile(file)
+        let data = try await runCapture(arguments: ["compose", "-f", file.path, "ps", "--format", "json"])
+        guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { throw DockerSupervisorError.invalidPlan }
+        return rows.compactMap { row in
+            guard let service = row["Service"] as? String ?? row["Name"] as? String else { return nil }
+            let state = row["State"] as? String ?? "unknown"
+            let health = row["Health"] as? String
+            let ports: [String] = (row["Publishers"] as? [[String: Any]])?.compactMap { publisher in
+                if let published = publisher["PublishedPort"] as? Int, let target = publisher["TargetPort"] as? Int { return "\(published):\(target)" }
+                return nil
+            } ?? []
+            return DockerComposeServiceInspection(service: service, state: state, health: health, ports: ports)
+        }.sorted { $0.service < $1.service }
+    }
+
+    public func composeLogs(file: URL, service: String? = nil, tail: Int = 200) async throws -> String {
+        try Self.validateComposeFile(file)
+        guard (1...10_000).contains(tail) else { throw DockerLogError.invalidTail }
+        var arguments = ["compose", "-f", file.path, "logs", "--tail", String(tail)]
+        if let service { try Self.validateName(service); arguments.append(service) }
+        return String(decoding: try await runCapture(arguments: arguments), as: UTF8.self)
+    }
+
+
+
     public func isActive(_ name: String) -> Bool { activeNames.contains(name) }
+
+    private static func validateComposeFile(_ file: URL) throws {
+        let forbidden = CharacterSet(charactersIn: ";&|$`<>(){}[]*?!~\"'\\#").union(.controlCharacters)
+        guard file.isFileURL, file.path.hasPrefix("/"), !file.path.hasSuffix("/"), file.path.rangeOfCharacter(from: forbidden) == nil else { throw DockerSupervisorError.invalidPlan }
+    }
 
     private func run(arguments: [String], output: (@Sendable (String) -> Void)?) async throws {
         guard !arguments.isEmpty, arguments.allSatisfy(Self.validArgument) else { throw DockerSupervisorError.invalidPlan }

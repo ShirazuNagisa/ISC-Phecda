@@ -46,7 +46,7 @@ struct BusinessNetworkView: View {
         }.padding(24).disabled(!model.running)
     }
     func probe() { model.execute { do { readiness = try await model.fetch("/v1/reach/providers/" + KernelClient.pathComponent(provider) + "/probe") } catch { self.error = error.localizedDescription } } }
-    func plan() { model.execute { do { readiness = try await model.request("POST", "/v1/reach/providers/" + KernelClient.pathComponent(provider) + "/plan", body: .object(["port": .number(Double(Int(port) ?? 0)), "protocol": .string("tcp"), "label": .string("ISC")])) } catch { self.error = error.localizedDescription } } }
+    func plan() { model.execute { do { readiness = try await model.request("POST", "/v1/reach/providers/" + KernelClient.pathComponent(provider) + "/plan", body: .object(["port": .number(Double(Int(port) ?? 0)), "protocol": .string("tcp"), "label": .string("ISC Phecda")])) } catch { self.error = error.localizedDescription } } }
     func startVerify() { model.execute { do { session = try await model.request("POST", "/v1/verify/sessions", body: .object(["port": .number(Double(Int(port) ?? 0))])) } catch { self.error = error.localizedDescription } } }
     func stopVerify(_ value: JSONValue) { model.execute { _ = try? await model.request("DELETE", "/v1/verify/sessions/" + KernelClient.pathComponent(value.id)); session = nil } }
 }

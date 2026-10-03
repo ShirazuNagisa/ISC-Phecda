@@ -32,10 +32,19 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
 
     init(dataDirectory: URL? = nil) {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        self.dataDirectory = dataDirectory ?? support.appendingPathComponent("ISC/Kernel", isDirectory: true)
-        archiveURL = self.dataDirectory.deletingLastPathComponent().appendingPathComponent("services.json")
+        let phecdaRoot = support.appendingPathComponent("ISC Phecda", isDirectory: true)
+        let oldRoot = support.appendingPathComponent("ISC", isDirectory: true)
+        self.dataDirectory = dataDirectory ?? phecdaRoot.appendingPathComponent("Kernel", isDirectory: true)
+        archiveURL = phecdaRoot.appendingPathComponent("services.json")
+        Self.migrateLegacyData(from: oldRoot, to: phecdaRoot)
         do { services = try ServiceArchive.load(from: archiveURL).services }
         catch { errorMessage = error.localizedDescription }
+    }
+    private static func migrateLegacyData(from oldRoot: URL, to newRoot: URL) {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: oldRoot.path), !fm.fileExists(atPath: newRoot.path) else { return }
+        do { try fm.copyItem(at: oldRoot, to: newRoot) }
+        catch { NSLog("ISC Phecda legacy migration failed: %@", error.localizedDescription) }
     }
     var running: Bool { phase == .running }
     var orderedServices: [PublishedService] {
@@ -135,8 +144,8 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
         let key = event["type"].string + payload["id"].string
         guard lastNotification[key].map({ Date().timeIntervalSince($0) >= 300 }) ?? true else { return }
         lastNotification[key] = Date()
-        let content = UNMutableNotificationContent(); content.title = "ISC"
-        content.body = payload["message"].string.isEmpty ? tr("服务需要检查，请打开 ISC 查看详情。", "A service needs attention. Open ISC for details.") : payload["message"].string
+        let content = UNMutableNotificationContent(); content.title = "ISC Phecda"
+        content.body = payload["message"].string.isEmpty ? tr("服务需要检查，请打开 ISC Phecda 查看详情。", "A service needs attention. Open ISC Phecda for details.") : payload["message"].string
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
     }
     func enableNotifications() async {

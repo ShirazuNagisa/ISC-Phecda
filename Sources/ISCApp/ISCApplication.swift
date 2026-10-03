@@ -22,16 +22,16 @@ import ISCCore
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "network", accessibilityDescription: "ISC")
+        item.button?.image = NSImage(systemSymbolName: "network", accessibilityDescription: "ISC Phecda")
         item.button?.target = self; item.button?.action = #selector(togglePopover)
-        item.button?.toolTip = "ISC"
+        item.button?.toolTip = "ISC Phecda"
         statusItem = item
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 380, height: 540)
         popover.contentViewController = NSHostingController(rootView: MenuPanel(model: model, openWindow: { [weak self] in self?.openWindow() }, togglePin: { [weak self] in self?.togglePin() }, closePanel: { [weak self] in self?.popover.performClose(nil) }, isPinned: { [weak self] in self?.pinned ?? false }))
         modelObservation = Task {
             for await state in Observations({ (self.model.running, self.model.services.contains { self.model.serviceIssue($0) != nil }) }) {
-                self.statusItem?.button?.image = NSImage(systemSymbolName: state.1 ? "network.badge.shield.half.filled" : "network", accessibilityDescription: "ISC")
+                self.statusItem?.button?.image = NSImage(systemSymbolName: state.1 ? "network.badge.shield.half.filled" : "network", accessibilityDescription: "ISC Phecda")
                 self.statusItem?.button?.toolTip = state.0 ? tr("ISC · 内核运行中", "ISC · Kernel running") : tr("ISC · 内核未运行", "ISC · Kernel stopped")
             }
         }
@@ -52,7 +52,7 @@ import ISCCore
     func openWindow() {
         popover.performClose(nil)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 760), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "ISC"
+        window.title = "ISC Phecda"
         window.minSize = NSSize(width: 860, height: 600)
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
@@ -98,7 +98,7 @@ struct MenuPanel: View {
             HStack {
                 Image(systemName: "network").font(.title2).foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("ISC").font(.headline)
+                    Text("ISC Phecda").font(.headline)
                     Text(model.running ? tr("内核运行中", "Kernel running") : tr("内核未运行", "Kernel stopped")).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -148,7 +148,7 @@ struct MenuPanel: View {
                 Spacer()
                 if model.phase == .starting || model.phase == .stopping { ProgressView().controlSize(.small) }
                 else { Button(model.running ? tr("停止内核", "Stop kernel") : tr("启动内核", "Start kernel")) { if model.running { model.execute { try await model.stop() } } else { Task { await model.start() } } }.buttonStyle(.borderless) }
-                Menu { Button(tr("退出 ISC", "Quit ISC"), role: .destructive) { NSApp.terminate(nil) } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 20)
+                Menu { Button(tr("退出 ISC Phecda", "Quit ISC Phecda"), role: .destructive) { NSApp.terminate(nil) } } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).frame(width: 20)
             }.padding(16)
         }.frame(width: 380, height: 540)
     }

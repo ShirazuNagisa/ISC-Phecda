@@ -52,7 +52,7 @@ struct MainView: View {
                 } else if section == "settings" { SettingsView(model: model) }
                 else { BusinessView(model: model, section: section ?? "credentials") }
             }
-            .navigationTitle(NavigationSection.all.first { $0.id == section }?.title ?? "ISC")
+            .navigationTitle(NavigationSection.all.first { $0.id == section }?.title ?? "ISC Phecda")
             .toolbar {
                 ToolbarItem { Button { newWindow() } label: { Image(systemName: "macwindow.badge.plus") }.help(tr("新建管理窗口", "New management window")) }
                 ToolbarItem { Button { Task { await model.refreshAll() } } label: { Image(systemName: "arrow.clockwise") }.disabled(!model.running) }
@@ -164,7 +164,7 @@ struct SettingsView: View {
                     Text(tr("跟随系统", "System")).tag("system"); Text(tr("浅色", "Light")).tag("light"); Text(tr("深色", "Dark")).tag("dark")
                 }
                 LabeledContent(tr("语言", "Language"), value: tr("跟随系统（简体中文 / English）", "System (English / Simplified Chinese)"))
-                Toggle(tr("登录时启动 ISC", "Open ISC at login"), isOn: Binding(get: { loginStatus == .enabled }, set: { enabled in
+                Toggle(tr("登录时启动 ISC Phecda", "Open ISC Phecda at login"), isOn: Binding(get: { loginStatus == .enabled }, set: { enabled in
                     do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; loginStatus = SMAppService.mainApp.status }
                     catch { model.errorMessage = error.localizedDescription }
                 }))
@@ -174,7 +174,7 @@ struct SettingsView: View {
             Section(tr("内核", "Kernel")) {
                 LabeledContent(tr("运行状态", "Status"), value: model.running ? tr("运行中", "Running") : tr("已停止", "Stopped"))
                 LabeledContent(tr("数据位置", "Data location")) { Text(model.dataDirectory.path).textSelection(.enabled).font(.caption) }
-                Text(tr("关闭管理窗口后，菜单栏与内核继续运行。选择“退出 ISC”会先停止内核，然后退出应用。", "Closing a management window keeps the menu bar and kernel running. Quit ISC stops the kernel before exiting the app.")).foregroundStyle(.secondary)
+                Text(tr("关闭管理窗口后，菜单栏与内核继续运行。选择“退出 ISC Phecda”会先停止内核，然后退出应用。", "Closing a management window keeps the menu bar and kernel running. Quit ISC Phecda stops the kernel before exiting the app.")).foregroundStyle(.secondary)
                 HStack {
                     Button(model.running ? tr("停止内核", "Stop kernel") : tr("启动内核", "Start kernel")) { if model.running { model.execute { try await model.stop() } } else { Task { await model.start() } } }.disabled(model.phase == .starting || model.phase == .stopping)
                     Button(tr("打开数据文件夹", "Show data folder")) { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: model.dataDirectory.path) }

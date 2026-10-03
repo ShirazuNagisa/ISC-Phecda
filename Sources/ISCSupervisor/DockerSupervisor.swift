@@ -12,7 +12,8 @@ public struct DockerContainerInspection: Codable, Sendable, Equatable {
     public let running: Bool
     public let status: String
     public let ports: [String]
-    public init(name: String, running: Bool, status: String, ports: [String] = []) { self.name = name; self.running = running; self.status = status; self.ports = ports }
+    public let health: String?
+    public init(name: String, running: Bool, status: String, ports: [String] = [], health: String? = nil) { self.name = name; self.running = running; self.status = status; self.ports = ports; self.health = health }
 }
 
 public enum DockerLogError: Error, LocalizedError, Sendable, Equatable {
@@ -66,7 +67,19 @@ public actor DockerSupervisor {
         guard let items = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], let item = items.first,
               let state = item["State"] as? [String: Any], let running = state["Running"] as? Bool, let status = state["Status"] as? String else { throw DockerSupervisorError.invalidPlan }
         let ports = ((item["NetworkSettings"] as? [String: Any])?["Ports"] as? [String: Any])?.keys.sorted() ?? []
-        return DockerContainerInspection(name: name, running: running, status: status, ports: ports)
+        let health = (state["Health"] as? [String: Any])?["Status"] as? String
+        return DockerContainerInspection(name: name, running: running, status: status, ports: ports, health: health)
+    }
+
+    public func waitUntilReady(name: String, timeout: Duration = .seconds(60)) async throws -> DockerContainerInspection {
+        let deadline = ContinuousClock.now + timeout
+        while true {
+            let inspection = try await inspect(name: name)
+            if !inspection.running { throw DockerSupervisorError.commandFailed(1) }
+            if inspection.health == nil || inspection.health == "healthy" { return inspection }
+            if inspection.health == "unhealthy" || ContinuousClock.now >= deadline { throw DockerSupervisorError.commandFailed(1) }
+            try await Task.sleep(for: .milliseconds(500))
+        }
     }
 
     public func logs(name: String, tail: Int = 200) async throws -> String {

@@ -2,7 +2,7 @@ import Foundation
 
 /// One request per JSON line. No executable paths or shell text are accepted.
 public struct SupervisorServiceRequest: Codable, Sendable, Equatable {
-    public enum Command: String, Codable, Sendable { case ping, list, submit, cancel, rollback, manifest, dockerInspect, dockerLogs }
+    public enum Command: String, Codable, Sendable { case ping, list, submit, cancel, rollback, manifest, dockerInspect, dockerLogs, dockerWaitReady }
     public let requestID: String?
     public let command: Command
     public let plan: DeploymentPlan?
@@ -129,6 +129,9 @@ public actor SupervisorService {
             case .dockerLogs:
                 guard let name = request.dockerName else { return failure(request.requestID, "invalid_request", "dockerName is required.") }
                 return SupervisorServiceResponse(requestID: request.requestID, dockerLogs: try await docker.logs(name: name, tail: request.dockerTail ?? 200))
+            case .dockerWaitReady:
+                guard let name = request.dockerName else { return failure(request.requestID, "invalid_request", "dockerName is required.") }
+                return SupervisorServiceResponse(requestID: request.requestID, dockerInspection: try await docker.waitUntilReady(name: name))
             case .submit:
                 guard let plan = request.plan else {
                     return failure(request.requestID, "invalid_request", "submit requires a plan.")

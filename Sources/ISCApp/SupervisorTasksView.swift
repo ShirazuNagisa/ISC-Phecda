@@ -84,7 +84,7 @@ private struct DockerPanel: View {
                 Button { readLogs() } label: { Image(systemName: "doc.text") }.disabled(name.isEmpty)
             }
             if let inspection {
-                Text("\(inspection.name): \(inspection.status)" + (inspection.running ? " · running" : ""))
+                Text("\(inspection.name): \(inspection.status)" + (inspection.running ? " · running" : "") + (inspection.health.map { " · \($0)" } ?? ""))
                     .font(.caption.monospaced())
                 if !inspection.ports.isEmpty { Text(inspection.ports.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary) }
             }

@@ -57,6 +57,9 @@ public actor SupervisorServiceClient {
     public func dockerLogs(_ name: String, tail: Int = 200) throws -> String? {
         try request(SupervisorServiceRequest(command: .dockerLogs, dockerName: name, dockerTail: tail)).dockerLogs
     }
+    public func dockerWaitReady(_ name: String) throws -> DockerContainerInspection? {
+        try request(SupervisorServiceRequest(command: .dockerWaitReady, dockerName: name)).dockerInspection
+    }
     public func manifest(url: URL? = nil, sha256: String? = nil) throws -> RuntimeManifest? {
         try request(SupervisorServiceRequest(command: .manifest, manifestURL: url, manifestSHA256: sha256)).manifest
     }

@@ -1,10 +1,37 @@
 import Foundation
 
 public enum PresetCommand: String, Codable, Sendable, CaseIterable {
-    case installNodeDependencies, installPythonDependencies, buildNode, buildPython, buildGo, buildJava, runNode, runPython, runGo, runJava
+    case serveStatic, installNodeDependencies, installPythonDependencies, installPHPDependencies, installGoDependencies, installJavaDependencies, buildNode, buildPython, buildPHP, buildGo, buildJava, runNode, runPython, runPHP, runGo, runJava
 
-    public var executable: String { switch self { case .installNodeDependencies, .buildNode, .runNode: "npm"; case .installPythonDependencies, .buildPython, .runPython: "python3"; case .buildGo, .runGo: "go"; case .buildJava, .runJava: "java" } }
-    public func arguments(workspace: URL) -> [String] { switch self { case .installNodeDependencies: ["install", "--ignore-scripts"]; case .installPythonDependencies: ["-m", "pip", "install", "-r", "requirements.txt"]; case .buildNode: ["run", "build"]; case .buildPython: ["-m", "compileall", "."]; case .buildGo: ["build", "-o", ".supervisor/bin/app", "."]; case .buildJava: ["-jar", "app.jar"]; case .runNode: ["start"]; case .runPython: ["-m", "http.server", "8000"]; case .runGo: [".supervisor/bin/app"]; case .runJava: ["-jar", "app.jar"] } }
+    public var executable: String {
+        switch self {
+        case .serveStatic, .installPythonDependencies, .buildPython, .runPython: "python3"
+        case .installNodeDependencies, .buildNode, .runNode: "npm"
+        case .installPHPDependencies, .buildPHP, .runPHP: "php"
+        case .installGoDependencies, .buildGo, .runGo: "go"
+        case .installJavaDependencies, .buildJava, .runJava: "mvn"
+        }
+    }
+    public func arguments(workspace: URL) -> [String] {
+        switch self {
+        case .serveStatic: ["-m", "http.server", "8080", "--bind", "127.0.0.1"]
+        case .installNodeDependencies: ["install", "--ignore-scripts"]
+        case .installPythonDependencies: ["-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements.txt"]
+        case .installPHPDependencies: ["install", "--no-interaction", "--no-progress", "--no-scripts"]
+        case .installGoDependencies: ["mod", "download"]
+        case .installJavaDependencies: ["dependency:go-offline", "-B"]
+        case .buildNode: ["run", "build"]
+        case .buildPython: ["-m", "compileall", "."]
+        case .buildPHP: ["-l", "index.php"]
+        case .buildGo: ["build", "-o", ".supervisor/bin/app", "."]
+        case .buildJava: ["package", "-DskipTests", "-B"]
+        case .runNode: ["start"]
+        case .runPython: ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"]
+        case .runPHP: ["-S", "127.0.0.1:8080", "-t", "public"]
+        case .runGo: ["run", ".supervisor/bin/app"]
+        case .runJava: ["spring-boot:run"]
+        }
+    }
 }
 
 public struct ProcessCommandPreview: Codable, Sendable, Equatable {
@@ -52,6 +79,23 @@ public actor ProcessSupervisor: ProcessSupervising {
         if let output, let tail = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8), !tail.isEmpty { output(tail) }
         try Task.checkCancellation()
         guard child.terminationStatus == 0 else { throw ProcessSupervisorError.terminated(child.terminationStatus) }
+    }
+    public func start(_ command: PresetCommand, workspace: URL, output: (@Sendable (String) -> Void)? = nil) throws {
+        guard process == nil else { throw ProcessSupervisorError.alreadyRunning }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: workspace.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw ProcessSupervisorError.invalidWorkspace }
+        let preview = ProcessCommandPreview(preset: command, workingDirectory: workspace)
+        let child = Process(); child.executableURL = try Self.resolve(preview.executable); child.arguments = preview.arguments; child.currentDirectoryURL = workspace
+        let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe
+        if let output { pipe.fileHandleForReading.readabilityHandler = { handle in if let text = String(data: handle.availableData, encoding: .utf8), !text.isEmpty { output(text) } } }
+        try child.run(); process = child
+    }
+    public var running: Bool { process?.isRunning == true }
+    public func stop() async throws {
+        guard let child = process else { throw ProcessSupervisorError.notRunning }
+        child.terminate()
+        while child.isRunning { try await Task.sleep(for: .milliseconds(25)) }
+        process = nil
     }
     public func cancel() async { process?.terminate() }
     private static func resolve(_ executable: String) throws -> URL { let paths = ["/usr/bin/\(executable)", "/opt/homebrew/bin/\(executable)", "/usr/local/bin/\(executable)"]; guard let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { throw ProcessSupervisorError.executableNotFound(executable) }; return URL(fileURLWithPath: path) }

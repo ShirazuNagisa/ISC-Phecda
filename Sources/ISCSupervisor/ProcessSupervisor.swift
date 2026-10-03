@@ -66,7 +66,7 @@ public actor ProcessSupervisor: ProcessSupervising {
         let preview = ProcessCommandPreview(preset: command, workingDirectory: workspace)
         let executableURL = try Self.resolve(preview.executable)
         let child = Process(); child.executableURL = executableURL; child.arguments = preview.arguments; child.currentDirectoryURL = workspace
-        let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe
+        let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe; child.standardInput = FileHandle.nullDevice
         process = child
         defer { process = nil }
         if let output { pipe.fileHandleForReading.readabilityHandler = { handle in if let text = String(data: handle.availableData, encoding: .utf8), !text.isEmpty { output(text) } } }
@@ -86,7 +86,7 @@ public actor ProcessSupervisor: ProcessSupervising {
         guard FileManager.default.fileExists(atPath: workspace.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw ProcessSupervisorError.invalidWorkspace }
         let preview = ProcessCommandPreview(preset: command, workingDirectory: workspace)
         let child = Process(); child.executableURL = try Self.resolve(preview.executable); child.arguments = preview.arguments; child.currentDirectoryURL = workspace
-        let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe
+        let pipe = Pipe(); child.standardOutput = pipe; child.standardError = pipe; child.standardInput = FileHandle.nullDevice
         if let output { pipe.fileHandleForReading.readabilityHandler = { handle in if let text = String(data: handle.availableData, encoding: .utf8), !text.isEmpty { output(text) } } }
         try child.run(); process = child
     }

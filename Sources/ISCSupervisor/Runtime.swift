@@ -195,6 +195,7 @@ public struct RuntimeInstaller: Sendable {
         let error = Pipe()
         process.standardOutput = output
         process.standardError = error
+        process.standardInput = FileHandle.nullDevice
         do { try process.run() } catch { throw RuntimeDownloadError.archiveExtractionFailed(error.localizedDescription) }
         process.waitUntilExit()
         let data = output.fileHandleForReading.readDataToEndOfFile()

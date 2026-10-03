@@ -3,4 +3,8 @@ Build/
 .DS_Store
 *.xcuserstate
 xcuserdata/
-.swiftpm/
+.swiftpm/*
+!.swiftpm/xcode/
+!.swiftpm/xcode/xcshareddata/
+!.swiftpm/xcode/xcshareddata/xcschemes/
+!.swiftpm/xcode/xcshareddata/xcschemes/ISC-Package.xcscheme

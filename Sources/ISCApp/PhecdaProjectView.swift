@@ -68,6 +68,7 @@ struct PhecdaProjectDetail: View {
     @State private var deploying = false
     @State private var deploymentMessage: String?
     @State private var showDeployConfirmation = false
+    @State private var showPublicBinding = false
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 18) {
             Text(project["name"].string).font(.title.bold())
@@ -86,6 +87,7 @@ struct PhecdaProjectDetail: View {
                     Button(tr("预览并部署", "Preview and deploy")) { showDeployConfirmation = true }.buttonStyle(.borderedProminent).disabled(deploying)
                 }
                 if let deploymentMessage { Text(deploymentMessage).foregroundStyle(.secondary).textSelection(.enabled) }
+                Button(tr("绑定公网服务", "Bind public service")) { showPublicBinding = true }.buttonStyle(.bordered).disabled(deploying)
                 if !scan["warning"].string.isEmpty { Text(scan["warning"].string).foregroundStyle(.orange) }
             }
             Text(tr("扫描阶段不会安装运行时、执行依赖命令、启动容器或修改 DNS。", "Scanning does not install runtimes, run dependency commands, start containers, or change DNS.")).foregroundStyle(.secondary)
@@ -95,6 +97,9 @@ struct PhecdaProjectDetail: View {
             Button(tr("取消", "Cancel"), role: .cancel) { }
         } message: {
             Text(tr("Phecda 将按预设安装依赖、构建并启动本地服务。命令来自固定 allowlist，不执行 shell。", "Phecda will install dependencies, build, and start the local service using an allowlisted command plan without a shell."))
+        }
+        .sheet(isPresented: $showPublicBinding) {
+            PublishWizard(model: model, initialName: project["name"].string, initialUpstream: "http://127.0.0.1:8080")
         }
     }
     func scanProject() { busy = true; model.execute { defer { busy = false }; scan = try? await model.request("POST", "/v1/phecda/projects/\(KernelClient.pathComponent(project.id))/scan") } }

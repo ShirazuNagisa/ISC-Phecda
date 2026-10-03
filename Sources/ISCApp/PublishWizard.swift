@@ -19,6 +19,13 @@ struct PublishWizard: View {
     @State private var busy = false
     @State private var error: String?
     @State private var completed: [String] = []
+    init(model: AppModel, onVerify: ((PublishedService) -> Void)? = nil, initialName: String = "", initialDomain: String = "", initialUpstream: String = "http://127.0.0.1:8080") {
+        self.model = model
+        self.onVerify = onVerify
+        _name = State(initialValue: initialName)
+        _domain = State(initialValue: initialDomain)
+        _upstream = State(initialValue: initialUpstream)
+    }
     private var credentials: [JSONValue] { model.items("/v1/credentials") }
     private var validBasics: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && domain.contains(".") && (kind == .dynamicDomain || upstream.contains(":")) }
     var body: some View {

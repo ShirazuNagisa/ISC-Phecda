@@ -2,17 +2,21 @@ import Foundation
 
 /// One request per JSON line. No executable paths or shell text are accepted.
 public struct SupervisorServiceRequest: Codable, Sendable, Equatable {
-    public enum Command: String, Codable, Sendable { case ping, list, submit, cancel, rollback }
+    public enum Command: String, Codable, Sendable { case ping, list, submit, cancel, rollback, manifest }
     public let requestID: String?
     public let command: Command
     public let plan: DeploymentPlan?
     public let deploymentID: UUID?
+    public let manifestURL: URL?
+    public let manifestSHA256: String?
 
-    public init(requestID: String? = nil, command: Command, plan: DeploymentPlan? = nil, deploymentID: UUID? = nil) {
+    public init(requestID: String? = nil, command: Command, plan: DeploymentPlan? = nil, deploymentID: UUID? = nil, manifestURL: URL? = nil, manifestSHA256: String? = nil) {
         self.requestID = requestID
         self.command = command
         self.plan = plan
         self.deploymentID = deploymentID
+        self.manifestURL = manifestURL
+        self.manifestSHA256 = manifestSHA256
     }
 }
 
@@ -30,9 +34,10 @@ public struct SupervisorServiceResponse: Codable, Sendable, Equatable {
     public let jobs: [SupervisorTaskState]?
     public let ledger: DeploymentLedgerSnapshot?
     public let release: DeploymentRecord?
+    public let manifest: RuntimeManifest?
     public let error: SupervisorServiceError?
 
-    public init(requestID: String? = nil, deploymentID: UUID? = nil, jobs: [SupervisorTaskState]? = nil, ledger: DeploymentLedgerSnapshot? = nil, release: DeploymentRecord? = nil, error: SupervisorServiceError? = nil) {
+    public init(requestID: String? = nil, deploymentID: UUID? = nil, jobs: [SupervisorTaskState]? = nil, ledger: DeploymentLedgerSnapshot? = nil, release: DeploymentRecord? = nil, manifest: RuntimeManifest? = nil, error: SupervisorServiceError? = nil) {
         self.protocolVersion = 1
         self.requestID = requestID
         self.ok = error == nil
@@ -40,6 +45,7 @@ public struct SupervisorServiceResponse: Codable, Sendable, Equatable {
         self.jobs = jobs
         self.ledger = ledger
         self.release = release
+        self.manifest = manifest
         self.error = error
     }
 }
@@ -68,6 +74,7 @@ public actor SupervisorService {
     private let jobs: SupervisorJobStore
     private let ledger: DeploymentLedger
     private let coordinator: DeploymentCoordinator
+    private let manifestStore: RuntimeManifestStore
     private var submittedIDs: Set<UUID> = []
 
     public init(stateDirectory: URL) throws {
@@ -76,9 +83,11 @@ public actor SupervisorService {
         }
         let jobs = SupervisorJobStore()
         let ledger = try DeploymentLedger(root: stateDirectory)
+        let manifestStore = try RuntimeManifestStore(location: stateDirectory.appendingPathComponent("runtime-manifest.json"))
         self.jobs = jobs
         self.ledger = ledger
         self.coordinator = DeploymentCoordinator(jobs: jobs, ledger: ledger)
+        self.manifestStore = manifestStore
     }
 
     public func handleLine(_ data: Data) async -> SupervisorServiceResponse {
@@ -98,6 +107,12 @@ public actor SupervisorService {
                 return SupervisorServiceResponse(requestID: request.requestID)
             case .list:
                 return await SupervisorServiceResponse(requestID: request.requestID, jobs: jobs.allStates(), ledger: ledger.snapshot())
+            case .manifest:
+                if let url = request.manifestURL {
+                    guard let checksum = request.manifestSHA256 else { return failure(request.requestID, "invalid_request", "manifest refresh requires manifestSHA256.") }
+                    try await manifestStore.refresh(url: url, expectedSHA256: checksum)
+                }
+                return SupervisorServiceResponse(requestID: request.requestID, manifest: await manifestStore.manifest())
             case .submit:
                 guard let plan = request.plan else {
                     return failure(request.requestID, "invalid_request", "submit requires a plan.")

@@ -51,6 +51,9 @@ public actor SupervisorServiceClient {
     }
 
     public func cancel(_ id: UUID) throws { _ = try request(SupervisorServiceRequest(command: .cancel, deploymentID: id)) }
+    public func manifest(url: URL? = nil, sha256: String? = nil) throws -> RuntimeManifest? {
+        try request(SupervisorServiceRequest(command: .manifest, manifestURL: url, manifestSHA256: sha256)).manifest
+    }
     public func rollback(_ id: UUID) throws -> SupervisorServiceResponse { try request(SupervisorServiceRequest(command: .rollback, deploymentID: id)) }
     public func list() throws -> SupervisorServiceResponse { try request(SupervisorServiceRequest(command: .list)) }
     public func shutdown() { process.terminate(); input.closeFile(); output.closeFile() }

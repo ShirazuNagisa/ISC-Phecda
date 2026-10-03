@@ -69,8 +69,9 @@ public struct RuntimeCatalog: Sendable {
 
 public enum RuntimeDownloadError: Error, LocalizedError, Sendable, Equatable {
     case invalidChecksum, checksumMismatch(expected: String, actual: String), invalidResponse, cancelled, destinationExists
+    case unsupportedArchive, unsafeArchiveEntry(String), invalidInstallPath, archiveExtractionFailed(String)
     public var errorDescription: String? {
-        switch self { case .invalidChecksum: "The runtime checksum must be a 64-character SHA-256 value."; case let .checksumMismatch(expected, actual): "SHA-256 mismatch (expected \(expected), got \(actual))."; case .invalidResponse: "The runtime download returned an invalid response."; case .cancelled: "The runtime download was cancelled."; case .destinationExists: "The runtime destination already exists." }
+        switch self { case .invalidChecksum: "The runtime checksum must be a 64-character SHA-256 value."; case let .checksumMismatch(expected, actual): "SHA-256 mismatch (expected \(expected), got \(actual))."; case .invalidResponse: "The runtime download returned an invalid response."; case .cancelled: "The runtime download was cancelled."; case .destinationExists: "The runtime destination already exists."; case .unsupportedArchive: "Only tar.gz and zip runtime archives are supported."; case let .unsafeArchiveEntry(path): "The runtime archive contains an unsafe entry: \(path)."; case .invalidInstallPath: "Runtime and version must be safe path components."; case let .archiveExtractionFailed(message): "Runtime archive extraction failed: \(message)" }
     }
 }
 
@@ -104,6 +105,104 @@ public struct RuntimeDownloader: Sendable {
         if fileManager.fileExists(atPath: destination.path) { throw RuntimeDownloadError.destinationExists }
         try fileManager.moveItem(at: temporary, to: destination)
         return destination
+    }
+}
+
+
+public struct RuntimeInstaller: Sendable {
+    public init() {}
+
+    public func install(_ artifact: RuntimeArtifact, archive: URL, to root: URL, fileManager: FileManager = .default) throws -> URL {
+        try Task.checkCancellation()
+        guard Self.safeComponent(artifact.runtime), Self.safeComponent(artifact.version) else { throw RuntimeDownloadError.invalidInstallPath }
+        let ext = artifact.archiveName.lowercased()
+        let isZip = ext.hasSuffix(".zip")
+        let isTarGz = ext.hasSuffix(".tar.gz")
+        guard isZip || isTarGz else { throw RuntimeDownloadError.unsupportedArchive }
+        let destination = root.appendingPathComponent(artifact.runtime, isDirectory: true).appendingPathComponent(artifact.version, isDirectory: true)
+        if fileManager.fileExists(atPath: destination.path) { throw RuntimeDownloadError.destinationExists }
+        try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let staging = destination.deletingLastPathComponent().appendingPathComponent(".\(artifact.version).\(UUID().uuidString).staging", isDirectory: true)
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: false)
+        defer { try? fileManager.removeItem(at: staging) }
+        try Task.checkCancellation()
+
+        if isZip {
+            let listing = try Self.run("/usr/bin/unzip", ["-Z1", archive.path])
+            try Self.validateListedPaths(listing)
+            let details = try Self.run("/usr/bin/unzip", ["-Z", "-v", archive.path])
+            if details.contains("120777") { throw RuntimeDownloadError.unsafeArchiveEntry("ZIP symbolic link") }
+            try Task.checkCancellation()
+            _ = try Self.run("/usr/bin/unzip", ["-qq", archive.path, "-d", staging.path])
+        } else {
+            let paths = try Self.run("/usr/bin/tar", ["-tzf", archive.path])
+            try Self.validateListedPaths(paths)
+            let listing = try Self.run("/usr/bin/tar", ["-tvzf", archive.path])
+            for line in listing.split(separator: "\n") {
+                guard let first = line.first, first != "l", first != "h" else { throw RuntimeDownloadError.unsafeArchiveEntry(String(line)) }
+            }
+            try Task.checkCancellation()
+            _ = try Self.run("/usr/bin/tar", ["-xzf", archive.path, "-C", staging.path, "--no-same-owner", "--no-same-permissions"])
+        }
+        try Task.checkCancellation()
+        try Self.validateTree(staging, fileManager: fileManager)
+        if fileManager.fileExists(atPath: destination.path) { throw RuntimeDownloadError.destinationExists }
+        try fileManager.moveItem(at: staging, to: destination)
+        return destination
+    }
+
+    public func install(runtime: String, version: String, from catalog: RuntimeCatalog, archive: URL, to root: URL, fileManager: FileManager = .default) throws -> URL {
+        guard let artifact = catalog.artifact(runtime: runtime, version: version) else { throw RuntimeDownloadError.invalidResponse }
+        return try install(artifact, archive: archive, to: root, fileManager: fileManager)
+    }
+
+    private static func safeComponent(_ value: String) -> Bool {
+        !value.isEmpty && value != "." && value != ".." && !value.contains("/") && !value.contains("\\") && !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+    }
+
+    private static func validatePath(_ path: String) throws {
+        let normalized = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !path.hasPrefix("/"), !path.contains("\\"), !normalized.isEmpty,
+              normalized.split(separator: "/", omittingEmptySubsequences: false).allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            throw RuntimeDownloadError.unsafeArchiveEntry(path)
+        }
+    }
+
+    private static func validateListedPaths(_ output: String) throws {
+        for path in output.split(separator: "\n", omittingEmptySubsequences: false) { try validatePath(String(path)) }
+    }
+
+    private static func validateTree(_ root: URL, fileManager: FileManager) throws {
+        guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey], options: []) else {
+            throw RuntimeDownloadError.archiveExtractionFailed("Could not inspect extracted files")
+        }
+        let rootPath = root.standardizedFileURL.path + "/"
+        for case let item as URL in enumerator {
+            try Task.checkCancellation()
+            guard item.standardizedFileURL.path.hasPrefix(rootPath) else { throw RuntimeDownloadError.unsafeArchiveEntry(item.path) }
+            let values = try item.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey])
+            guard values.isSymbolicLink != true, values.isRegularFile == true || values.isDirectory == true else {
+                throw RuntimeDownloadError.unsafeArchiveEntry(item.lastPathComponent)
+            }
+        }
+    }
+
+    private static func run(_ executable: String, _ arguments: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        let output = Pipe()
+        let error = Pipe()
+        process.standardOutput = output
+        process.standardError = error
+        do { try process.run() } catch { throw RuntimeDownloadError.archiveExtractionFailed(error.localizedDescription) }
+        process.waitUntilExit()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        let errorData = error.fileHandleForReading.readDataToEndOfFile()
+        guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+            throw RuntimeDownloadError.archiveExtractionFailed(String(decoding: errorData, as: UTF8.self))
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 }
 

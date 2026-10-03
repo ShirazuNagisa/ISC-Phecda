@@ -60,6 +60,12 @@ public actor SupervisorServiceClient {
     public func dockerWaitReady(_ name: String) throws -> DockerContainerInspection? {
         try request(SupervisorServiceRequest(command: .dockerWaitReady, dockerName: name)).dockerInspection
     }
+    public func composeStatus(_ file: URL) throws -> [DockerComposeServiceInspection]? {
+        try request(SupervisorServiceRequest(command: .dockerComposeStatus, composeFile: file)).composeServices
+    }
+    public func composeLogs(_ file: URL, service: String? = nil, tail: Int = 200) throws -> String? {
+        try request(SupervisorServiceRequest(command: .dockerComposeLogs, dockerTail: tail, composeFile: file, composeService: service)).composeLogs
+    }
     public func manifest(url: URL? = nil, sha256: String? = nil) throws -> RuntimeManifest? {
         try request(SupervisorServiceRequest(command: .manifest, manifestURL: url, manifestSHA256: sha256)).manifest
     }

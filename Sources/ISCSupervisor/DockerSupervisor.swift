@@ -10,6 +10,7 @@ public enum DockerSupervisorError: Error, LocalizedError, Sendable, Equatable {
 public actor DockerSupervisor {
     private let planner: DockerPlanner
     private var activeNames: Set<String> = []
+    private var activeSources: [String: DockerSourcePlan] = [:]
     public init(planner: DockerPlanner = DockerPlanner()) { self.planner = planner }
 
     public func plan(source: DockerSourcePlan, name: String, ports: [Int] = [], policy: DockerPolicy = .init()) throws -> DockerCommandPlan {
@@ -19,16 +20,31 @@ public actor DockerSupervisor {
     @discardableResult
     public func start(source: DockerSourcePlan, name: String, ports: [Int] = [], policy: DockerPolicy = .init(), output: (@Sendable (String) -> Void)? = nil) async throws -> DockerCommandPlan {
         let plan = try planner.plan(source: source, name: name, ports: ports, policy: policy)
-        try await run(arguments: plan.arguments, output: output)
+        switch source {
+        case .dockerfile:
+            try await run(arguments: plan.arguments, output: output)
+            let runArguments = ["run", "--detach", "--name", name] + ports.flatMap { ["--publish", "\($0):\($0)"] } + [name]
+            try await run(arguments: runArguments, output: output)
+        default:
+            try await run(arguments: plan.arguments, output: output)
+        }
         activeNames.insert(name)
+        activeSources[name] = source
         return plan
     }
 
     public func stop(name: String, remove: Bool = false, output: (@Sendable (String) -> Void)? = nil) async throws {
         guard !name.isEmpty, name.rangeOfCharacter(from: CharacterSet(charactersIn: ";&|$`<>\n\r")) == nil else { throw DockerSupervisorError.invalidPlan }
-        try await run(arguments: ["stop", name], output: output)
-        if remove { try await run(arguments: ["rm", "--force", name], output: output) }
+        if case let .compose(file) = activeSources[name] {
+            var arguments = ["compose", "-f", file.path, "down"]
+            if remove { arguments.append("--volumes") }
+            try await run(arguments: arguments, output: output)
+        } else {
+            try await run(arguments: ["stop", name], output: output)
+            if remove { try await run(arguments: ["rm", "--force", name], output: output) }
+        }
         activeNames.remove(name)
+        activeSources[name] = nil
     }
 
     public func isActive(_ name: String) -> Bool { activeNames.contains(name) }

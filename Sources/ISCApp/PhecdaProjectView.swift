@@ -140,7 +140,7 @@ struct PhecdaProjectDetail: View {
                     default: throw DeploymentPlanError.invalidPlan
                     }
                     let plan = try DeploymentPlan(workspace: workspace, installCommands: commands.install, buildCommand: commands.build, runCommand: commands.run, localPort: localPort)
-                    let taskID = await model.supervisor.submit(plan)
+                    let taskID = try await model.submitDeployment(plan)
                     deploymentMessage = tr("部署任务已提交：\(taskID.uuidString)", "Deployment submitted: \(taskID.uuidString)")
                 }
                 let state = runtime == "docker" ? "running" : "preparing"

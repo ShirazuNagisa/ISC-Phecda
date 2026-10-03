@@ -14,6 +14,7 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
     let kernel = KernelClient()
     let supervisor = DeploymentCoordinator()
     let dockerSupervisor = DockerSupervisor()
+    var supervisorClient: SupervisorServiceClient?
     var phase: KernelPhase = .stopped
     var services: [PublishedService] = []
     var datasets: [String: JSONValue] = [:]
@@ -39,6 +40,10 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
         let oldRoot = support.appendingPathComponent("ISC", isDirectory: true)
         self.dataDirectory = dataDirectory ?? phecdaRoot.appendingPathComponent("Kernel", isDirectory: true)
         archiveURL = phecdaRoot.appendingPathComponent("services.json")
+        let bundleHelper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/PhecdaSupervisor")
+        let siblingHelper = URL(fileURLWithPath: CommandLine.arguments.first ?? "").deletingLastPathComponent().appendingPathComponent("PhecdaSupervisor")
+        let helper = FileManager.default.isExecutableFile(atPath: bundleHelper.path) ? bundleHelper : siblingHelper
+        supervisorClient = try? SupervisorServiceClient(executableURL: helper, stateDirectory: phecdaRoot.appendingPathComponent("Supervisor", isDirectory: true))
         Self.migrateLegacyData(from: oldRoot, to: phecdaRoot)
         do { services = try ServiceArchive.load(from: archiveURL).services }
         catch { errorMessage = error.localizedDescription }
@@ -73,6 +78,10 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
         activityCount += 1
         defer { activityCount -= 1 }
         return try await kernel.callRaw(method, path, body: body).body
+    }
+    func submitDeployment(_ plan: DeploymentPlan) async throws -> UUID {
+        if let supervisorClient { return try await supervisorClient.submit(plan) }
+        return await supervisor.submit(plan)
     }
     func execute(_ operation: @escaping @MainActor () async throws -> Void) {
         Task {

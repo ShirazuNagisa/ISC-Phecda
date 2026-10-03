@@ -140,6 +140,7 @@ struct PhecdaProjectDetail: View {
             defer { deploying = false }
             guard let projectID else { deploymentMessage = tr("项目 ID 无效。", "The project ID is invalid."); return }
             do {
+                let deploymentIdentifier = UUID()
                 let mode = project["source"]["mode"].string
                 let value = project["source"]["value"].string
                 let localPort = Int(preset["default_port"].number)
@@ -167,12 +168,12 @@ struct PhecdaProjectDetail: View {
                     case "java": commands = ([.installJavaDependencies], .buildJava, .runJava)
                     default: throw DeploymentPlanError.invalidPlan
                     }
-                    let plan = try DeploymentPlan(workspace: workspace, installCommands: commands.install, buildCommand: commands.build, runCommand: commands.run, localPort: localPort, runtimeRoot: model.dataDirectory.deletingLastPathComponent().appendingPathComponent("Runtimes", isDirectory: true), runtime: runtime, releaseRoot: model.dataDirectory.deletingLastPathComponent().appendingPathComponent("Deployments", isDirectory: true))
+                    let plan = try DeploymentPlan(id: deploymentIdentifier, workspace: workspace, installCommands: commands.install, buildCommand: commands.build, runCommand: commands.run, localPort: localPort, runtimeRoot: model.dataDirectory.deletingLastPathComponent().appendingPathComponent("Runtimes", isDirectory: true), runtime: runtime, releaseRoot: model.dataDirectory.deletingLastPathComponent().appendingPathComponent("Deployments", isDirectory: true))
                     let taskID = try await model.submitDeployment(plan)
                     deploymentMessage = tr("部署任务已提交：\(taskID.uuidString)", "Deployment submitted: \(taskID.uuidString)")
                 }
                 let state = runtime == "docker" ? "running" : "preparing"
-                let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
+                let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
                 deploymentID = UUID(uuidString: deployment["id"].string)
                 _ = try await model.fetch("/v1/phecda/deployments")
             } catch { deploymentMessage = error.localizedDescription }

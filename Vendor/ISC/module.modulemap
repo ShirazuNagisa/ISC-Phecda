@@ -1,0 +1,5 @@
+module CISC [system] {
+    header "libisc.h"
+    link "isc"
+    export *
+}

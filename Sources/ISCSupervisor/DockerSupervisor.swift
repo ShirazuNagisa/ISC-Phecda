@@ -7,6 +7,19 @@ public enum DockerSupervisorError: Error, LocalizedError, Sendable, Equatable {
     public var errorDescription: String? { switch self { case .executableNotFound: "Docker executable was not found."; case .invalidPlan: "The Docker command plan is invalid."; case let .commandFailed(code): "Docker exited with status \(code)." } }
 }
 
+public struct DockerContainerInspection: Codable, Sendable, Equatable {
+    public let name: String
+    public let running: Bool
+    public let status: String
+    public let ports: [String]
+    public init(name: String, running: Bool, status: String, ports: [String] = []) { self.name = name; self.running = running; self.status = status; self.ports = ports }
+}
+
+public enum DockerLogError: Error, LocalizedError, Sendable, Equatable {
+    case invalidTail
+    public var errorDescription: String? { "Docker log tail must be between 1 and 10000 lines." }
+}
+
 public actor DockerSupervisor {
     private let planner: DockerPlanner
     private var activeNames: Set<String> = []
@@ -47,6 +60,21 @@ public actor DockerSupervisor {
         activeSources[name] = nil
     }
 
+    public func inspect(name: String) async throws -> DockerContainerInspection {
+        try Self.validateName(name)
+        let data = try await runCapture(arguments: ["inspect", name])
+        guard let items = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], let item = items.first,
+              let state = item["State"] as? [String: Any], let running = state["Running"] as? Bool, let status = state["Status"] as? String else { throw DockerSupervisorError.invalidPlan }
+        let ports = ((item["NetworkSettings"] as? [String: Any])?["Ports"] as? [String: Any])?.keys.sorted() ?? []
+        return DockerContainerInspection(name: name, running: running, status: status, ports: ports)
+    }
+
+    public func logs(name: String, tail: Int = 200) async throws -> String {
+        try Self.validateName(name)
+        guard (1...10_000).contains(tail) else { throw DockerLogError.invalidTail }
+        return String(decoding: try await runCapture(arguments: ["logs", "--tail", String(tail), name]), as: UTF8.self)
+    }
+
     public func isActive(_ name: String) -> Bool { activeNames.contains(name) }
 
     private func run(arguments: [String], output: (@Sendable (String) -> Void)?) async throws {
@@ -62,5 +90,21 @@ public actor DockerSupervisor {
         guard process.terminationStatus == 0 else { throw DockerSupervisorError.commandFailed(process.terminationStatus) }
     }
 
+    private func runCapture(arguments: [String]) async throws -> Data {
+        guard !arguments.isEmpty, arguments.allSatisfy(Self.validArgument) else { throw DockerSupervisorError.invalidPlan }
+        guard let executable = Self.executableURL() else { throw DockerSupervisorError.executableNotFound }
+        let process = Process(); process.executableURL = executable; process.arguments = arguments
+        let output = Pipe(); process.standardOutput = output; process.standardError = output; process.standardInput = FileHandle.nullDevice
+        try process.run()
+        while process.isRunning { try await Task.sleep(for: .milliseconds(50)); try Task.checkCancellation() }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        guard process.terminationStatus == 0 else { throw DockerSupervisorError.commandFailed(process.terminationStatus) }
+        return data
+    }
+
+    private static func validateName(_ name: String) throws {
+        guard !name.isEmpty, validArgument(name) else { throw DockerSupervisorError.invalidPlan }
+    }
+    private static func executableURL() -> URL? { ["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/usr/bin/docker"].compactMap { FileManager.default.isExecutableFile(atPath: $0) ? URL(fileURLWithPath: $0) : nil }.first }
     private static func validArgument(_ argument: String) -> Bool { !argument.isEmpty && argument.rangeOfCharacter(from: CharacterSet(charactersIn: ";&|$`<>\n\r")) == nil }
 }

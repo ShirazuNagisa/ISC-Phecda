@@ -51,6 +51,7 @@ public actor SupervisorServiceClient {
     }
 
     public func cancel(_ id: UUID) throws { _ = try request(SupervisorServiceRequest(command: .cancel, deploymentID: id)) }
+    public func rollback(_ id: UUID) throws -> SupervisorServiceResponse { try request(SupervisorServiceRequest(command: .rollback, deploymentID: id)) }
     public func list() throws -> SupervisorServiceResponse { try request(SupervisorServiceRequest(command: .list)) }
     public func shutdown() { process.terminate(); input.closeFile(); output.closeFile() }
 }

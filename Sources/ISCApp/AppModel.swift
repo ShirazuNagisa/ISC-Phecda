@@ -83,6 +83,10 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
         if let supervisorClient { return try await supervisorClient.submit(plan) }
         return await supervisor.submit(plan)
     }
+    func rollbackDeployment(_ id: UUID) async throws {
+        if let supervisorClient { _ = try await supervisorClient.rollback(id) }
+        else { _ = try await supervisor.rollback(id) }
+    }
     func execute(_ operation: @escaping @MainActor () async throws -> Void) {
         Task {
             do { try await operation() }

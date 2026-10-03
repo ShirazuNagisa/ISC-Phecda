@@ -177,10 +177,18 @@ struct PhecdaProjectDetail: View {
     func bind(_ service: PublishedService) {
         guard let deploymentID else { return }
         model.execute {
-            let body: JSONValue = .object(["id": .string(deploymentID.uuidString), "project_id": .string(project.id), "preset_id": .string(selectedPreset?["id"].string ?? ""), "state": .string("running"), "public_service_id": .string(service.id.uuidString)])
-            _ = try await model.request("POST", "/v1/phecda/deployments", body: body)
-            _ = try await model.fetch("/v1/phecda/deployments")
-            deploymentMessage = tr("公网服务已关联。", "Public service binding saved.")
+            do {
+                let body: JSONValue = .object(["id": .string(deploymentID.uuidString), "project_id": .string(project.id), "preset_id": .string(selectedPreset?["id"].string ?? ""), "state": .string("running"), "public_service_id": .string(service.id.uuidString)])
+                _ = try await model.request("POST", "/v1/phecda/deployments", body: body)
+                _ = try await model.fetch("/v1/phecda/deployments")
+                deploymentMessage = tr("公网服务已关联。", "Public service binding saved.")
+            } catch {
+                let message = error.localizedDescription
+                try? await model.rollbackDeployment(deploymentID)
+                let failure: JSONValue = .object(["id": .string(deploymentID.uuidString), "project_id": .string(project.id), "preset_id": .string(selectedPreset?["id"].string ?? ""), "state": .string("failed"), "last_error": .string(message)])
+                _ = try? await model.request("POST", "/v1/phecda/deployments", body: failure)
+                deploymentMessage = tr("公网绑定失败，已回滚本地部署：\(message)", "Public binding failed; local deployment rolled back: \(message)")
+            }
         }
     }
 }

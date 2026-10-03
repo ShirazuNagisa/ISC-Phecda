@@ -5,7 +5,11 @@ import ISCCore
 
 @main struct ISCApplication: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    var body: some Scene { Settings { SettingsView(model: delegate.model) } }
+    var body: some Scene {
+        WindowGroup("ISC", id: "main") {
+            MainView(model: delegate.model, newWindow: { delegate.openWindow() })
+        }
+    }
 }
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -36,8 +40,7 @@ import ISCCore
             }
         }
         Task { await model.start() }
-        // Xcode 调试和首次启动都直接展示管理窗口；关闭窗口只回到菜单栏，不退出应用。
-        openWindow()
+        // WindowGroup 负责创建首个管理窗口；关闭窗口后菜单栏应用与内核继续运行。
     }
     @objc private func togglePopover() {
         guard let button = statusItem?.button else { return }

@@ -9,6 +9,10 @@ struct SupervisorTasksView: View {
     @State private var dockerName = ""
     @State private var dockerInspection: DockerContainerInspection?
     @State private var dockerLogs: String?
+    @State private var composeFile = ""
+    @State private var composeService = ""
+    @State private var composeServices: [DockerComposeServiceInspection] = []
+    @State private var composeLogs: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -37,7 +41,7 @@ struct SupervisorTasksView: View {
                     }.padding(.vertical, 5)
                 }
             }
-            DockerPanel(name: $dockerName, inspection: $dockerInspection, logs: $dockerLogs, message: $message, model: model)
+            DockerPanel(name: $dockerName, inspection: $dockerInspection, logs: $dockerLogs, composeFile: $composeFile, composeService: $composeService, composeServices: $composeServices, composeLogs: $composeLogs, message: $message, model: model)
         }
         .padding(24)
         .task { load() }
@@ -73,6 +77,10 @@ private struct DockerPanel: View {
     @Binding var name: String
     @Binding var inspection: DockerContainerInspection?
     @Binding var logs: String?
+    @Binding var composeFile: String
+    @Binding var composeService: String
+    @Binding var composeServices: [DockerComposeServiceInspection]
+    @Binding var composeLogs: String?
     @Binding var message: String?
     let model: AppModel
     var body: some View {
@@ -92,6 +100,21 @@ private struct DockerPanel: View {
                 ScrollView { Text(logs).font(.caption.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                     .frame(maxHeight: 150)
             }
+            Divider()
+            Text(tr("Docker Compose", "Docker Compose")).font(.subheadline.bold())
+            HStack {
+                TextField(tr("Compose 文件绝对路径", "Absolute Compose file path"), text: $composeFile)
+                Button { inspectCompose() } label: { Image(systemName: "list.bullet.rectangle") }.disabled(composeFile.isEmpty)
+            }
+            HStack {
+                TextField(tr("服务名（可选）", "Service name (optional)"), text: $composeService)
+                Button { readComposeLogs() } label: { Image(systemName: "doc.text") }.disabled(composeFile.isEmpty)
+            }
+            ForEach(composeServices) { service in
+                Text("\(service.service): \(service.state)" + (service.health.map { " · \($0)" } ?? "") + (service.ports.isEmpty ? "" : " · " + service.ports.joined(separator: ", ")))
+                    .font(.caption.monospaced())
+            }
+            if let composeLogs { ScrollView { Text(composeLogs).font(.caption.monospaced()).textSelection(.enabled) }.frame(maxHeight: 120) }
         }
         .padding(.top, 8)
     }
@@ -103,4 +126,13 @@ private struct DockerPanel: View {
         guard let client = model.supervisorClient else { message = tr("独立 Supervisor 未运行。", "Independent Supervisor is unavailable."); return }
         Task { do { logs = try await client.dockerLogs(name); message = nil } catch let caught { message = caught.localizedDescription } }
     }
+    private func inspectCompose() {
+        guard let client = model.supervisorClient, composeFile.hasPrefix("/") else { message = tr("Compose 文件路径无效。", "Invalid Compose file path."); return }
+        Task { do { composeServices = try await client.composeStatus(URL(fileURLWithPath: composeFile)) ?? []; message = nil } catch let caught { message = caught.localizedDescription } }
+    }
+    private func readComposeLogs() {
+        guard let client = model.supervisorClient, composeFile.hasPrefix("/") else { message = tr("Compose 文件路径无效。", "Invalid Compose file path."); return }
+        Task { do { composeLogs = try await client.composeLogs(URL(fileURLWithPath: composeFile), service: composeService.isEmpty ? nil : composeService); message = nil } catch let caught { message = caught.localizedDescription } }
+    }
 }
+

@@ -61,6 +61,20 @@ public struct RuntimeCatalog: Sendable {
     public func artifact(runtime: String, version: String) -> RuntimeArtifact? {
         manifest.artifacts.first { $0.runtime == runtime && $0.version == version }
     }
+    public func preferred(runtime: String, version: String? = nil) -> RuntimeArtifact? {
+        let candidates = manifest.artifacts.filter { $0.runtime == runtime && (version == nil || $0.version == version) }
+        return candidates.max { Self.versionLess($0.version, $1.version) }
+    }
+    private static func versionLess(_ lhs: String, _ rhs: String) -> Bool {
+        let left = lhs.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        let right = rhs.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        for index in 0..<max(left.count, right.count) {
+            let a = index < left.count ? left[index] : 0
+            let b = index < right.count ? right[index] : 0
+            if a != b { return a < b }
+        }
+        return lhs < rhs
+    }
     public func download(runtime: String, version: String, to destination: URL, using downloader: RuntimeDownloader = RuntimeDownloader()) async throws -> URL {
         guard let artifact = artifact(runtime: runtime, version: version) else { throw RuntimeDownloadError.invalidResponse }
         return try await downloader.download(artifact, to: destination)

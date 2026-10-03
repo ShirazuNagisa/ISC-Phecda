@@ -15,6 +15,15 @@ struct RuntimeManifestStoreTests {
             try await restored.refresh(url: URL(string: "http://example.invalid/manifest.json")!, expectedSHA256: String(repeating: "a", count: 64), loader: FixtureManifestLoader(data: Data()))
         }
     }
+
+    @Test func preferredArtifactSelectsHighestVersion() throws {
+        let artifacts = try ["1.9.0", "22.1.0", "22.10.0"].map { version in
+            try RuntimeArtifact(id: "node-\(version)", runtime: "node", version: version, url: URL(string: "https://example.invalid/\(version).zip")!, sha256: String(repeating: "b", count: 64), archiveName: "node.zip")
+        }
+        let catalog = RuntimeCatalog(manifest: RuntimeManifest(artifacts: artifacts))
+        #expect(catalog.preferred(runtime: "node")?.version == "22.10.0")
+        #expect(catalog.preferred(runtime: "node", version: "1.9.0")?.version == "1.9.0")
+    }
 }
 
 private struct FixtureManifestLoader: RuntimeDataLoader {

@@ -51,11 +51,16 @@ public actor DockerSupervisor {
         default:
             try await run(arguments: plan.arguments, output: output)
         }
-        if waitForReady, case .compose = source {} else if waitForReady {
-            do { _ = try await waitUntilReady(name: name) }
-            catch {
-                try? await run(arguments: ["stop", name], output: output)
-                try? await run(arguments: ["rm", "--force", name], output: output)
+        if waitForReady {
+            do {
+                if case let .compose(file) = source { _ = try await waitUntilComposeReady(file: file) }
+                else { _ = try await waitUntilReady(name: name) }
+            } catch {
+                if case let .compose(file) = source { try? await run(arguments: ["compose", "-f", file.path, "down"], output: output) }
+                else {
+                    try? await run(arguments: ["stop", name], output: output)
+                    try? await run(arguments: ["rm", "--force", name], output: output)
+                }
                 throw error
             }
         }
@@ -105,6 +110,23 @@ public actor DockerSupervisor {
         return String(decoding: try await runCapture(arguments: ["logs", "--tail", String(tail), name]), as: UTF8.self)
     }
 
+    public func waitUntilComposeReady(file: URL, timeout: Duration = .seconds(60)) async throws -> [DockerComposeServiceInspection] {
+        let deadline = ContinuousClock.now + timeout
+        while true {
+            let services = try await composeStatus(file: file)
+            guard !services.isEmpty else { throw DockerSupervisorError.invalidPlan }
+            let failed = services.contains { ["exited", "dead", "unhealthy"].contains($0.state.lowercased()) || $0.health?.lowercased() == "unhealthy" }
+            let ready = services.allSatisfy { service in
+                let stateReady = ["running", "up"].contains(service.state.lowercased())
+                let healthReady = service.health == nil || service.health?.lowercased() == "healthy"
+                return stateReady && healthReady
+            }
+            if failed { throw DockerSupervisorError.commandFailed(1) }
+            if ready { return services }
+            if ContinuousClock.now >= deadline { throw DockerSupervisorError.commandFailed(1) }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+    }
     public func composeStatus(file: URL) async throws -> [DockerComposeServiceInspection] {
         try Self.validateComposeFile(file)
         let data = try await runCapture(arguments: ["compose", "-f", file.path, "ps", "--format", "json"])

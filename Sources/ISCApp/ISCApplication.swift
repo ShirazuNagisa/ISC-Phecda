@@ -5,11 +5,7 @@ import ISCCore
 
 @main struct ISCApplication: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    var body: some Scene {
-        WindowGroup("ISC", id: "main") {
-            MainView(model: delegate.model, newWindow: { delegate.openWindow() })
-        }
-    }
+    var body: some Scene { Settings { EmptyView() } }
 }
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -32,7 +28,7 @@ import ISCCore
         statusItem = item
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 380, height: 540)
-        popover.contentViewController = NSHostingController(rootView: MenuPanel(model: model, openWindow: { [weak self] in self?.openWindow() }, togglePin: { [weak self] in self?.togglePin() }, isPinned: { [weak self] in self?.pinned ?? false }))
+        popover.contentViewController = NSHostingController(rootView: MenuPanel(model: model, openWindow: { [weak self] in self?.openWindow() }, togglePin: { [weak self] in self?.togglePin() }, closePanel: { [weak self] in self?.popover.performClose(nil) }, isPinned: { [weak self] in self?.pinned ?? false }))
         modelObservation = Task {
             for await state in Observations({ (self.model.running, self.model.services.contains { self.model.serviceIssue($0) != nil }) }) {
                 self.statusItem?.button?.image = NSImage(systemSymbolName: state.1 ? "network.badge.shield.half.filled" : "network", accessibilityDescription: "ISC")
@@ -40,7 +36,8 @@ import ISCCore
             }
         }
         Task { await model.start() }
-        // WindowGroup 负责创建首个管理窗口；关闭窗口后菜单栏应用与内核继续运行。
+        // AppKit owns the only management window; closing it leaves the menu bar app running.
+        DispatchQueue.main.async { [weak self] in self?.openWindow() }
     }
     @objc private func togglePopover() {
         guard let button = statusItem?.button else { return }
@@ -50,7 +47,7 @@ import ISCCore
     private func togglePin() {
         pinned.toggle()
         popover.behavior = pinned ? .applicationDefined : .transient
-        popover.contentViewController = NSHostingController(rootView: MenuPanel(model: model, openWindow: { [weak self] in self?.openWindow() }, togglePin: { [weak self] in self?.togglePin() }, isPinned: { [weak self] in self?.pinned ?? false }))
+        popover.contentViewController = NSHostingController(rootView: MenuPanel(model: model, openWindow: { [weak self] in self?.openWindow() }, togglePin: { [weak self] in self?.togglePin() }, closePanel: { [weak self] in self?.popover.performClose(nil) }, isPinned: { [weak self] in self?.pinned ?? false }))
     }
     func openWindow() {
         popover.performClose(nil)
@@ -94,6 +91,7 @@ struct MenuPanel: View {
     @Bindable var model: AppModel
     let openWindow: () -> Void
     let togglePin: () -> Void
+    let closePanel: () -> Void
     let isPinned: () -> Bool
     var body: some View {
         VStack(spacing: 0) {
@@ -105,7 +103,7 @@ struct MenuPanel: View {
                 }
                 Spacer()
                 Button(action: togglePin) { Image(systemName: isPinned() ? "pin.fill" : "pin") }.help(tr("固定面板", "Pin panel"))
-                Button { NSApp.keyWindow?.close() } label: { Image(systemName: "xmark") }.help(tr("关闭面板", "Close panel"))
+                Button(action: closePanel) { Image(systemName: "xmark") }.help(tr("关闭面板", "Close panel"))
             }.buttonStyle(.borderless).padding(20)
             Divider()
             ScrollView {

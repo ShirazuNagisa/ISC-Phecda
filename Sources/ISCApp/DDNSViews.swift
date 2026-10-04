@@ -283,21 +283,28 @@ struct DDNSTaskFormView: View {
             if enabled.wrappedValue {
                 HStack(spacing: 10) {
                     Picker("", selection: getType) {
-                        Text(tr("自动（从网卡读取）", "Automatic (from the interface)")).tag("netInterface")
+                        Text(tr("从网卡读取", "From the interface")).tag("netInterface")
                         Text(tr("外部接口查询", "External lookup")).tag("url")
                         Text(tr("执行命令", "Run a command")).tag("cmd")
                     }
                     .labelsHidden()
-                    if getType.wrappedValue != "netInterface" {
+                    if getType.wrappedValue == "netInterface" {
+                        // 网卡名留空表示自动挑一个。要求用户知道自己的网卡
+                        // 叫什么（en0 / eth0 / 一堆 utun）是不合理的，而
+                        // 猜错的代价是首次配置必然失败一次。
+                        TextField(tr("网卡名，留空自动选择", "Interface name, empty to auto-select"), text: value)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
                         TextField(getType.wrappedValue == "url" ? "https://api.ipify.org" : "/path/to/script",
                                   text: value)
                             .textFieldStyle(.roundedBorder)
                     }
                 }
                 if getType.wrappedValue == "netInterface" {
-                    Text(tr("由内核从网卡快照里挑选可用于公网的地址。",
-                            "The kernel picks a publicly usable address from its interface snapshot."))
+                    Text(tr("留空时由内核从网卡快照里挑第一个有可用地址的网卡；快照已经过滤掉链路本地与内网地址。",
+                            "When empty the kernel picks the first interface with a usable address; link-local and private addresses are already filtered out."))
                         .font(.caption2).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -361,10 +368,10 @@ struct DDNSTaskFormView: View {
         var input = DdnsTaskInput(credentialId: credentialID, label: label)
         input.enabled = true
         input.ipv4 = DdnsSource(enable: ipv4Enabled, getType: ipv4Type,
-                                value: ipv4Type == "netInterface" ? "" : ipv4Value,
+                                value: ipv4Value.trimmingCharacters(in: .whitespaces),
                                 domains: domainList)
         input.ipv6 = DdnsSource(enable: ipv6Enabled, getType: ipv6Type,
-                                value: ipv6Type == "netInterface" ? "" : ipv6Value,
+                                value: ipv6Value.trimmingCharacters(in: .whitespaces),
                                 domains: domainList)
         if !ttl.trimmingCharacters(in: .whitespaces).isEmpty { input.ttl = ttl }
         if !httpInterface.trimmingCharacters(in: .whitespaces).isEmpty { input.httpInterface = httpInterface }

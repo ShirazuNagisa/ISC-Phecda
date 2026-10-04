@@ -113,6 +113,7 @@ struct RootView: View {
             case .home: HomeView(model: model)
             case .services: ServicesView(model: model)
             case .dns: DNSView(model: model)
+            case .remote: RemoteView(model: model)
             }
         }
     }

@@ -287,12 +287,83 @@ extension KernelClient {
         try await sendIgnoringReply("POST", "/v1/jobs/\(Self.pathComponent(id))/cancel")
     }
 
-    public func audit(action: String? = nil, result: String? = nil) async throws -> [AuditEntry] {
+    public func audit(action: String? = nil, actionPrefix: String? = nil, result: String? = nil, limit: Int? = nil) async throws -> [AuditEntry] {
         var query: [String] = []
         if let action, !action.isEmpty { query.append("action=\(Self.pathComponent(action))") }
+        // 前缀与精确匹配是两个不同的意图：「我就要这一条」与「这一整块」。
+        // 访问日志用的是后者（`remote.`）。
+        if let actionPrefix, !actionPrefix.isEmpty { query.append("action_prefix=\(Self.pathComponent(actionPrefix))") }
         if let result, !result.isEmpty { query.append("result=\(Self.pathComponent(result))") }
+        if let limit { query.append("limit=\(limit)") }
         let path = query.isEmpty ? "/v1/audit" : "/v1/audit?" + query.joined(separator: "&")
         return try await send("GET", path, body: Optional<Never>.none, as: AuditList.self).items
+    }
+
+    // MARK: - 远程访问（ISC Mizar）
+
+    public func remoteStatus() async throws -> RemoteStatus {
+        try await send("GET", "/v1/remote/status", body: Optional<Never>.none, as: RemoteStatus.self)
+    }
+
+    /// 开/关远程访问或改端口。返回**更新后**的状态。
+    ///
+    /// 监听起不来（端口被占）不是错误：设置已经生效，失败原因在
+    /// `lastError` 里。界面据此把"已开启"与"真的在监听"分开显示。
+    public func updateRemoteSettings(_ patch: RemoteSettingsPatch) async throws -> RemoteStatus {
+        try await send("PATCH", "/v1/remote/settings", body: patch, as: RemoteStatus.self)
+    }
+
+    public func startRemotePairing(role: String, label: String?) async throws -> RemotePairingSession {
+        try await send("POST", "/v1/remote/pairing",
+                       body: RemotePairingRequest(role: role, label: label),
+                       as: RemotePairingSession.self)
+    }
+
+    public func cancelRemotePairing(_ id: String) async throws {
+        try await sendIgnoringReply("DELETE", "/v1/remote/pairing/\(Self.pathComponent(id))")
+    }
+
+    public func remoteDevices() async throws -> [RemoteDevice] {
+        try await send("GET", "/v1/remote/devices", body: Optional<Never>.none, as: RemoteDeviceList.self).items
+    }
+
+    public func updateRemoteDevice(_ id: String, patch: RemoteDevicePatch) async throws -> RemoteDevice {
+        try await send("PATCH", "/v1/remote/devices/\(Self.pathComponent(id))", body: patch, as: RemoteDevice.self)
+    }
+
+    public func revokeRemoteDevice(_ id: String) async throws {
+        try await sendIgnoringReply("DELETE", "/v1/remote/devices/\(Self.pathComponent(id))")
+    }
+
+    /// 远程访问的审计记录（配对、吊销、设备操作）。
+    public func remoteAudit(limit: Int = 50) async throws -> [AuditEntry] {
+        try await audit(actionPrefix: "remote.", limit: limit)
+    }
+
+    /// 保存 APNs 凭据。
+    ///
+    /// 私钥**只写不读**：保存之后就再也取不回来，界面上只会显示
+    /// "已配置"与 key id 的末四位。
+    public func setApnsCredentials(teamID: String, keyID: String, bundleID: String,
+                                   privateKey: String) async throws -> ApnsStatus {
+        try await send("PUT", "/v1/remote/apns",
+                       body: ApnsCredentials(teamId: teamID, keyId: keyID,
+                                             bundleId: bundleID, privateKey: privateKey),
+                       as: ApnsStatus.self)
+    }
+
+    public func deleteApnsCredentials() async throws {
+        try await sendIgnoringReply("DELETE", "/v1/remote/apns")
+    }
+
+    /// 给一台设备发一条测试推送。
+    ///
+    /// **失败不抛错**：发送失败是一个结果，而返回体里那句来自 Apple 的
+    /// 说明（`BadDeviceToken`、`TopicDisallowed`…）正是排查时唯一有用的
+    /// 东西 —— 把它变成一个异常只会让那句话丢失。
+    public func testPush(deviceID: String) async throws -> ServiceActionResult {
+        try await send("POST", "/v1/remote/devices/\(Self.pathComponent(deviceID))/test-push",
+                       body: Optional<Never>.none, as: ServiceActionResult.self)
     }
 
     public func job(_ id: String) async throws -> JobInfo {

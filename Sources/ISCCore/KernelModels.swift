@@ -540,3 +540,146 @@ public struct AuditList: Decodable, Sendable {
     public let items: [AuditEntry]
     public let nextCursor: String?
 }
+
+// MARK: - 远程访问（ISC Mizar）
+
+/// 远程监听的运行状态。
+///
+/// `state` 用 String 而不是 enum：内核多一个取值时，界面应该显示它而不是
+/// 解码失败 —— 这一条对整个文件都成立，不只是这里。
+public struct RemoteStatus: Decodable, Sendable {
+    public let state: String
+    public let enabled: Bool
+    public let port: Int
+    public let listening: Bool?
+    /// 客户端可以尝试的候选地址（含端口），顺序即建议的尝试顺序。
+    public let addresses: [String]?
+    public let hostname: String?
+    public let spkiSha256: String?
+    /// 公钥指纹短码，形如 `A1B2-C3D4`，供两端人工核对。
+    public let fingerprintShort: String?
+    public let tlsNotAfter: Date?
+    public let deviceCount: Int
+    public let pairing: RemotePairingSession?
+    public let apnsConfigured: Bool?
+    public let apnsStatus: ApnsStatus?
+    public let notificationsEnabled: Bool
+    /// 最近一次监听失败的原因；空串表示正常。
+    public let lastError: String?
+
+    public var isRunning: Bool { state == "running" }
+    public var hasError: Bool { !(lastError ?? "").isEmpty }
+}
+
+/// APNs 凭据的状态（只有非敏感字段）。
+public struct ApnsStatus: Decodable, Sendable {
+    public let configured: Bool
+    public let teamId: String?
+    public let keyId: String?
+    public let bundleId: String?
+}
+
+/// 保存 APNs 凭据的请求体。
+public struct ApnsCredentials: Encodable, Sendable {
+    public var teamId: String
+    public var keyId: String
+    public var bundleId: String
+    public var privateKey: String
+
+    public init(teamId: String, keyId: String, bundleId: String, privateKey: String) {
+        self.teamId = teamId
+        self.keyId = keyId
+        self.bundleId = bundleId
+        self.privateKey = privateKey
+    }
+}
+
+/// 「做了一件事」的通用结果。
+public struct ServiceActionResult: Decodable, Sendable {
+    public let ok: Bool
+    public let message: String?
+
+    public init(ok: Bool, message: String?) {
+        self.ok = ok
+        self.message = message
+    }
+}
+
+/// 一次配对会话。
+public struct RemotePairingSession: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let role: String
+    public let label: String?
+    /// 六位手输配对码（字母表去掉了 I/L/O/U 与 0/1）。
+    public let manualCode: String
+    public let fingerprintShort: String
+    public let spkiSha256: String
+    public let addresses: [String]
+    public let expiresAt: Date
+    /// 二维码里要编码的原文。**由内核生成**，界面只负责渲染成像素。
+    public let qrPayload: String
+}
+
+/// 一台已配对的远程设备。
+public struct RemoteDevice: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let label: String
+    public let role: String
+    /// 派生令牌的来源设备；空串表示直接配对而来。
+    public let parentDeviceId: String?
+    public let platform: String?
+    public let model: String?
+    public let osVersion: String?
+    public let appVersion: String?
+    public let notificationsEnabled: Bool
+    public let createdAt: Date?
+    public let updatedAt: Date?
+    public let lastSeenAt: Date?
+    public let lastSeenIp: String?
+    public let revokedAt: Date?
+
+    public var revoked: Bool { revokedAt != nil }
+    public var isDerived: Bool { !(parentDeviceId ?? "").isEmpty }
+}
+
+public struct RemoteDeviceList: Decodable, Sendable {
+    public let items: [RemoteDevice]
+}
+
+/// 开配对会话的请求体。
+public struct RemotePairingRequest: Encodable, Sendable {
+    public var role: String
+    public var label: String?
+
+    public init(role: String, label: String?) {
+        self.role = role
+        self.label = label
+    }
+}
+
+/// 改远程访问设置的请求体（字段留 nil 表示不改）。
+public struct RemoteSettingsPatch: Encodable, Sendable {
+    public var enabled: Bool?
+    public var port: Int?
+    public var notificationsEnabled: Bool?
+
+    // 必须显式声明：省值的成员初始化器默认是 internal，而界面在另一个 target 里。
+    public init(enabled: Bool? = nil, port: Int? = nil, notificationsEnabled: Bool? = nil) {
+        self.enabled = enabled
+        self.port = port
+        self.notificationsEnabled = notificationsEnabled
+    }
+}
+
+/// 改一台设备的请求体（字段留 nil 表示不改）。
+public struct RemoteDevicePatch: Encodable, Sendable {
+    public var label: String?
+    public var role: String?
+    public var notificationsEnabled: Bool?
+
+    public init(label: String? = nil, role: String? = nil, notificationsEnabled: Bool? = nil) {
+        self.label = label
+        self.role = role
+        self.notificationsEnabled = notificationsEnabled
+    }
+}

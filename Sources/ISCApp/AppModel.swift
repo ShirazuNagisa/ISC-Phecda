@@ -17,11 +17,21 @@ enum RequestedSheet: String, Identifiable {
 
 /// 界面左侧的三个分区。
 ///
+/// v0.3.0 在原来的三块之外加了「远程访问」：内核的远程面可以在这里
+/// 开关、配对、看设备与审计、装 APNs 凭据。
+///
 /// v0.2.0 的界面只有这三块：首页（概览与建议）、服务（发布与查看）、
 /// DNS（解析条目）。无关的东西不保留 —— 面向的是"只想一步到位"的用户，
 /// 多出来的入口只会让他们不确定该点哪个。
 enum AppSection: String, CaseIterable, Identifiable {
-    case home, services, dns
+    /// 启动时选中的页面（默认首页）。
+    static var initial: AppSection {
+        guard let raw = ProcessInfo.processInfo.environment["ISC_PHECDA_SECTION"],
+              let section = AppSection(rawValue: raw) else { return .home }
+        return section
+    }
+
+    case home, services, dns, remote
 
     var id: String { rawValue }
 
@@ -30,6 +40,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: tr("首页", "Home")
         case .services: tr("服务", "Services")
         case .dns: tr("DNS", "DNS")
+        case .remote: tr("远程访问", "Remote Access")
         }
     }
 
@@ -38,6 +49,9 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: "gauge.with.dots.needle.50percent"
         case .services: "square.stack.3d.up"
         case .dns: "globe"
+        // 手机与内核之间的那条链路 —— 用天线而不是手机图标：
+        // 这一页讲的是"服务端对外开了一个口子"，不是"这里有一台手机"。
+        case .remote: "antenna.radiowaves.left.and.right"
         }
     }
 }
@@ -73,9 +87,23 @@ enum AppSection: String, CaseIterable, Identifiable {
     var jobs: [JobInfo] = []
     var events: [JSONValue] = []
 
+    // MARK: 远程访问
+
+    var remoteStatus: RemoteStatus?
+    var remoteDevices: [RemoteDevice] = []
+    /// 进行中的配对会话。它有时效，因此单独轮询刷新倒计时。
+    var pairingSession: RemotePairingSession?
+    var remoteAudit: [AuditEntry] = []
+
     // MARK: 界面状态
 
-    var section: AppSection = .home
+    /// 当前选中的页面。
+    ///
+    /// 初始值可以由 `ISC_PHECDA_SECTION` 指定 —— 那是一个**只为验证**存在的
+    /// 入口：本机没有辅助功能权限，脚本点不动侧栏，而"某个页面到底渲染成
+    /// 什么样"没有别的办法自动看一眼。环境变量只能在进程启动时由启动方
+    /// 设置，因此它不是一个可被外部利用的入口。
+    var section: AppSection = AppSection.initial
     var selectedAppID: String?
     var showingNewService = false
     /// 首次引导只在**第一次**出现。
@@ -210,9 +238,12 @@ enum AppSection: String, CaseIterable, Identifiable {
         async let settingsTask: KernelSettings? = attempt { try await self.kernel.settings() }
         async let advisoriesTask: [Advisory]? = attempt { try await self.kernel.advisories() }
         async let jobsTask: [JobInfo]? = attempt { try await self.kernel.jobs() }
+        async let remoteTask: RemoteStatus? = attempt { try await self.kernel.remoteStatus() }
+        async let devicesTask: [RemoteDevice]? = attempt { try await self.kernel.remoteDevices() }
 
-        let results = await (appsTask, runtimesTask, routesTask, certsTask, ddnsTask, credentialsTask, settingsTask, advisoriesTask, jobsTask)
+        let results = await (appsTask, runtimesTask, routesTask, certsTask, ddnsTask, credentialsTask, settingsTask, advisoriesTask, jobsTask, remoteTask)
         let currentIP = await ipTask
+        let currentDevices = await devicesTask
 
         guard running, generation == lifecycleGeneration else { return }
         if let value = results.0 { apps = value }
@@ -228,6 +259,8 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
         if let value = results.7 { advisories = value }
         if let value = results.8 { jobs = value }
+        if let value = results.9 { remoteStatus = value }
+        if let currentDevices { remoteDevices = currentDevices }
     }
 
     /// 重新判断要不要显示首次引导。

@@ -2,6 +2,9 @@
 import Foundation
 import PackageDescription
 
+// v0.3.0 新增「远程访问」页（D38）：内核的远程面在界面上可开、可配、
+// 可配对、可看设备与审计，并且能装 APNs 凭据去验证推送。
+//
 // v0.2.0 把 Phecda 收敛成纯 GUI：内核以 dylib 包体形式内嵌（D24），
 // 运行时供给、应用部署与进程守护、指标与建议全部在 ISC-Core 里。
 // 因此这里不再有 ISCSupervisor / PhecdaSupervisor 两个 target ——

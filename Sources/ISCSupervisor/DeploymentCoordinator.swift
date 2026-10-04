@@ -12,7 +12,8 @@ public struct DeploymentPlan: Codable, Sendable, Equatable, Identifiable {
     public let runtime: String?
     public let runtimeVersion: String?
     public let releaseRoot: URL?
-    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil, runtime: String? = nil, runtimeVersion: String? = nil, releaseRoot: URL? = nil) throws {
+    public let maxRestarts: Int
+    public init(id: UUID = UUID(), workspace: URL, installCommands: [PresetCommand] = [], buildCommand: PresetCommand? = nil, runCommand: PresetCommand, localPort: Int, runtimeArtifact: RuntimeArtifact? = nil, runtimeRoot: URL? = nil, runtime: String? = nil, runtimeVersion: String? = nil, releaseRoot: URL? = nil, maxRestarts: Int = 3) throws {
         let sourcePath = URL(fileURLWithPath: workspace.standardizedFileURL.path).path
         let releasePath = releaseRoot.map { URL(fileURLWithPath: $0.standardizedFileURL.path).path }
         guard workspace.isFileURL,
@@ -23,10 +24,28 @@ public struct DeploymentPlan: Codable, Sendable, Equatable, Identifiable {
               runtime.map({ !$0.isEmpty && !$0.contains("/") }) ?? true,
               runtimeVersion.map({ !$0.isEmpty && !$0.contains("/") }) ?? true,
               releaseRoot.map({ $0.isFileURL && $0.path.hasPrefix("/") }) ?? true,
-              releasePath.map({ $0 != sourcePath && !$0.hasPrefix(sourcePath + "/") }) ?? true else { throw DeploymentPlanError.invalidPlan }
-        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot; self.runtime = runtime; self.runtimeVersion = runtimeVersion; self.releaseRoot = releaseRoot
+              releasePath.map({ $0 != sourcePath && !$0.hasPrefix(sourcePath + "/") }) ?? true,
+              (0...10).contains(maxRestarts) else { throw DeploymentPlanError.invalidPlan }
+        self.id = id; self.workspace = workspace; self.installCommands = installCommands; self.buildCommand = buildCommand; self.runCommand = runCommand; self.localPort = localPort; self.runtimeArtifact = runtimeArtifact; self.runtimeRoot = runtimeRoot; self.runtime = runtime; self.runtimeVersion = runtimeVersion; self.releaseRoot = releaseRoot; self.maxRestarts = maxRestarts
     }
     public var previews: [ProcessCommandPreview] { installCommands.map { ProcessCommandPreview(preset: $0, workingDirectory: workspace) } + (buildCommand.map { [ProcessCommandPreview(preset: $0, workingDirectory: workspace)] } ?? []) + [ProcessCommandPreview(preset: runCommand, workingDirectory: workspace)] }
+    private enum CodingKeys: String, CodingKey { case id, workspace, installCommands, buildCommand, runCommand, localPort, runtimeArtifact, runtimeRoot, runtime, runtimeVersion, releaseRoot, maxRestarts }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.workspace = try container.decode(URL.self, forKey: .workspace)
+        self.installCommands = try container.decode([PresetCommand].self, forKey: .installCommands)
+        self.buildCommand = try container.decodeIfPresent(PresetCommand.self, forKey: .buildCommand)
+        self.runCommand = try container.decode(PresetCommand.self, forKey: .runCommand)
+        self.localPort = try container.decode(Int.self, forKey: .localPort)
+        self.runtimeArtifact = try container.decodeIfPresent(RuntimeArtifact.self, forKey: .runtimeArtifact)
+        self.runtimeRoot = try container.decodeIfPresent(URL.self, forKey: .runtimeRoot)
+        self.runtime = try container.decodeIfPresent(String.self, forKey: .runtime)
+        self.runtimeVersion = try container.decodeIfPresent(String.self, forKey: .runtimeVersion)
+        self.releaseRoot = try container.decodeIfPresent(URL.self, forKey: .releaseRoot)
+        self.maxRestarts = try container.decodeIfPresent(Int.self, forKey: .maxRestarts) ?? 3
+    }
+
 }
 
 public enum DeploymentPlanError: Error, LocalizedError, Sendable, Equatable {
@@ -112,10 +131,16 @@ public actor DeploymentCoordinator {
             }
             if let release, let ledger { _ = try await ledger.activate(release.id) }
             await update(.starting, 0.85, "Starting")
-            try await process.start(plan.runCommand, workspace: executionWorkspace) { _ in }
-            await update(.running, 0.9, "Running on 127.0.0.1:\(plan.localPort)")
-            while await process.running { try await Task.sleep(for: .milliseconds(250)) }
-            try Task.checkCancellation()
+            var restarts = 0
+            while true {
+                try await process.start(plan.runCommand, workspace: executionWorkspace) { _ in }
+                await update(.running, 0.9, "Running on 127.0.0.1:\(plan.localPort)")
+                while await process.running { try await Task.sleep(for: .milliseconds(250)) }
+                try Task.checkCancellation()
+                if restarts >= plan.maxRestarts { throw ProcessSupervisorError.terminated(1) }
+                restarts += 1
+                await update(.starting, 0.9, "Restarting after exit (\(restarts)/\(plan.maxRestarts))")
+            }
         }
     }
     public func cancel(_ id: UUID) async { await jobs.cancel(id); await processes[id]?.cancel() }

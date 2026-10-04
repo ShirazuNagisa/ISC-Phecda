@@ -139,11 +139,17 @@ struct PhecdaProjectDetail: View {
         model.execute {
             defer { deploying = false }
             guard let projectID else { deploymentMessage = tr("项目 ID 无效。", "The project ID is invalid."); return }
+            var dockerStarted = false
+            var dockerName = ""
             do {
                 let deploymentIdentifier = UUID()
                 let mode = project["source"]["mode"].string
                 let value = project["source"]["value"].string
                 let localPort = Int(preset["default_port"].number)
+                let state = "preparing"
+                let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
+                deploymentID = UUID(uuidString: deployment["id"].string)
+                model.monitorDeployment(deploymentIdentifier, projectID: projectID, presetID: preset["id"].string, localPort: localPort)
                 if runtime == "docker" {
                     let source: DockerSourcePlan
                     switch mode {
@@ -154,7 +160,9 @@ struct PhecdaProjectDetail: View {
                     }
                     let plan = try await model.dockerSupervisor.plan(source: source, name: project["name"].string, ports: [localPort])
                     deploymentMessage = plan.display
-                    _ = try await model.dockerSupervisor.start(source: source, name: project["name"].string, ports: [localPort], waitForReady: true)
+                    dockerName = project["name"].string
+                    _ = try await model.dockerSupervisor.start(source: source, name: dockerName, ports: [localPort], waitForReady: true)
+                    dockerStarted = true
                 } else {
                     guard mode == "directory" else { throw DeploymentPlanError.invalidPlan }
                     let workspace = URL(fileURLWithPath: value, isDirectory: true)
@@ -172,12 +180,11 @@ struct PhecdaProjectDetail: View {
                     let taskID = try await model.submitDeployment(plan)
                     deploymentMessage = tr("部署任务已提交：\(taskID.uuidString)", "Deployment submitted: \(taskID.uuidString)")
                 }
-                let state = runtime == "docker" ? "running" : "preparing"
-                let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
-                deploymentID = UUID(uuidString: deployment["id"].string)
-                model.monitorDeployment(deploymentIdentifier, projectID: projectID, presetID: preset["id"].string, localPort: localPort)
                 _ = try await model.fetch("/v1/phecda/deployments")
-            } catch { deploymentMessage = error.localizedDescription }
+            } catch {
+                if dockerStarted { try? await model.dockerSupervisor.stop(name: dockerName, remove: true) }
+                deploymentMessage = error.localizedDescription
+            }
         }
     }
     func rollbackPublishedService(_ service: PublishedService) async throws {

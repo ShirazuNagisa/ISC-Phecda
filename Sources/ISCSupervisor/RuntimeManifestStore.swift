@@ -15,6 +15,11 @@ public actor RuntimeManifestStore {
         if let data = try? Data(contentsOf: location) { current = try Self.decode(data) }
     }
     public func manifest() -> RuntimeManifest? { current }
+    public func installOfficialIfMissing() throws {
+        guard current == nil else { return }
+        try replace(with: OfficialRuntimeManifest.make())
+    }
+
     public func catalog() -> RuntimeCatalog? { current.map(RuntimeCatalog.init(manifest:)) }
     public func replace(with manifest: RuntimeManifest) throws {
         try Self.validate(manifest)

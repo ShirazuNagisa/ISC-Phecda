@@ -99,7 +99,11 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
                     if let error = state.error { fields["last_error"] = .string(error) }
                     _ = try await request("POST", "/v1/phecda/deployments", body: .object(fields))
                     if [.completed, .failed, .cancelled].contains(state.phase) { break }
-                } catch { break }
+                } catch let caught {
+                    let fields: [String: JSONValue] = ["id": .string(id.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(presetID), "state": .string("failed"), "local_port": .number(Double(localPort)), "last_error": .string(caught.localizedDescription)]
+                    _ = try? await request("POST", "/v1/phecda/deployments", body: .object(fields))
+                    break
+                }
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }

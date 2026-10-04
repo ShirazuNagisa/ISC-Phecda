@@ -108,6 +108,7 @@ public actor SupervisorService {
         self.coordinator = DeploymentCoordinator(jobs: jobs, ledger: ledger, manifestStore: manifestStore)
     }
 
+    public func bootstrapOfficialManifest() async throws { try await manifestStore.installOfficialIfMissing() }
     public func reconcile() async { await docker.reconcilePersistedSources() }
 
     public func handleLine(_ data: Data) async -> SupervisorServiceResponse {

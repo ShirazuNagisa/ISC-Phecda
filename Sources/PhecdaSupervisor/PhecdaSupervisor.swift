@@ -14,6 +14,7 @@ struct PhecdaSupervisor {
                 ? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/PhecdaSupervisor", isDirectory: true)
                 : URL(fileURLWithPath: arguments[1], isDirectory: true)
             let service = try SupervisorService(stateDirectory: directory)
+            try await service.bootstrapOfficialManifest()
             await service.reconcile()
             do {
                 while let line = readLine() {

@@ -127,7 +127,11 @@ struct AdvisoryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(advisory.title).font(.callout.weight(.medium))
                 if let detail = advisory.detail, !detail.isEmpty {
-                    Text(detail).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    // 建议的正文常常是底层工具的原样报错（可能很长且没有空格），
+                    // 必须按可用宽度换行，而不是反过来要求更多宽度。
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
@@ -154,6 +158,7 @@ struct EmptyHint: View {
             Image(systemName: symbol).font(.system(size: 30)).foregroundStyle(.tertiary)
             Text(title).font(.headline)
             Text(message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             if let action {
                 Button(action.label, action: action.run).buttonStyle(.glassProminent)
             }

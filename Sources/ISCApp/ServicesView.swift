@@ -5,8 +5,16 @@ struct ServicesView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        HSplitView {
-            list
+        // 用固定宽度的列表 + 可自由收缩的详情，而不是 HSplitView。
+        //
+        // HSplitView 按各栏的**理想宽度**分配空间，而详情里的日志与错误信息
+        // 长度不可控：一行没有空格的编译错误或 URL 会撑出一个很大的理想宽度，
+        // 于是它去挤左边的列表、进而挤整个侧边栏 —— 表现就是"切到服务之后
+        // 整个窗口的内容往左移"。列表定宽之后，详情再怎么长也只会自己收缩，
+        // 不会影响侧边栏。
+        HStack(spacing: 0) {
+            list.frame(width: 300)
+            Divider()
             Group {
                 if let app = model.selectedApp {
                     ServiceDetailView(model: model, app: app)
@@ -16,7 +24,11 @@ struct ServicesView: View {
                               message: tr("左侧列出你发布的所有站点。", "Your published sites are listed on the left."))
                 }
             }
-            .frame(minWidth: 420)
+            // minWidth: 0 是关键：只写 maxWidth 的话，最小宽度仍然由内容
+            // 决定，一行很长的日志依然会撑出一个下限，进而去挤侧边栏。
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+            // 详情里可能有任意长的文本；裁掉溢出，让它永远无法反向影响布局。
+            .clipped()
         }
         .navigationTitle(AppSection.services.title)
         .toolbar {
@@ -55,7 +67,6 @@ struct ServicesView: View {
                         .tag(app.id)
                     }
                 }
-                .frame(minWidth: 260)
             }
         }
     }
@@ -123,7 +134,8 @@ struct ServiceDetailView: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label).font(.caption).foregroundStyle(.secondary).frame(width: 78, alignment: .leading)
             Text(value).font(.callout).monospacedDigit().textSelection(.enabled)
-            Spacer()
+                .lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 0)
         }
     }
 
@@ -215,11 +227,16 @@ struct ServiceDetailView: View {
                             Text(line)
                                 .font(.system(.caption, design: .monospaced))
                                 .textSelection(.enabled)
+                                // 接受被给到的宽度、纵向自行增长：日志里常见
+                                // 没有空格的长路径与编译错误，任它们决定宽度
+                                // 就是上面那个"内容左移"的根因。
+                                .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     .padding(10)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity)
                 .frame(height: 220)
                 .background(.black.opacity(0.18), in: .rect(cornerRadius: 10))
             }
@@ -230,7 +247,8 @@ struct ServiceDetailView: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(tint)
             Text(text).font(.callout).textSelection(.enabled)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

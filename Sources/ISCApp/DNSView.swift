@@ -37,7 +37,7 @@ struct DNSView: View {
         .sheet(isPresented: $showingAdd) {
             if let credentialID, let zone {
                 AddRecordView(zone: zone) { request in
-                    try await model.kernel.createRecord(credentialID: credentialID, zone: zone, request)
+                    _ = try await model.kernel.createRecord(credentialID: credentialID, zone: zone, request)
                     await loadRecords()
                 }
             }

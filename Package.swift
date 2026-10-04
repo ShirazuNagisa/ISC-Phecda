@@ -1,10 +1,32 @@
 // swift-tools-version: 6.4
+import Foundation
 import PackageDescription
 
 // v0.2.0 把 Phecda 收敛成纯 GUI：内核以 dylib 包体形式内嵌（D24），
 // 运行时供给、应用部署与进程守护、指标与建议全部在 ISC-Core 里。
 // 因此这里不再有 ISCSupervisor / PhecdaSupervisor 两个 target ——
 // 曾经的 GUI 侧进程守护已经违反 D25（内核独占业务服务生命周期）。
+
+// 内核库所在的绝对路径。
+//
+// # 为什么需要它
+//
+// `libisc.dylib` 的 install name 是 `@rpath/libisc.dylib`，因此客户端必须在
+// 运行时找到它。下面那几条相对 rpath 覆盖的是 SwiftPM 的产物布局
+// （`.build/out/Products/<config>/`，SwiftPM 会把 dylib 拷到可执行文件旁边）。
+//
+// 但 Xcode 的产物在 DerivedData 下，而 DerivedData 与源码目录**没有任何
+// 相对关系** —— 从 `Build/Products/Debug` 往上走多少层都到不了仓库。于是
+// 在 Xcode 里 Run 会直接挂在 dyld：Library not loaded。
+//
+// 因此把仓库里 Vendor/ISC 的绝对路径也加进 rpath。它只在"本机源码构建"时
+// 有意义：分发出去的产物在没有这个路径的机器上，dyld 会自然落到后面那几条
+// 相对 rpath 上，行为不受影响。
+let vendorPath = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent("Vendor/ISC")
+    .path
+
 let package = Package(
     name: "ISC-Phecda",
     platforms: [.macOS("27.0")],
@@ -23,6 +45,7 @@ let package = Package(
                     "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks",
                     "-Xlinker", "-rpath", "-Xlinker", "@loader_path/../../..",
                     "-Xlinker", "-rpath", "-Xlinker", "@loader_path/../../../../Vendor/ISC",
+                    "-Xlinker", "-rpath", "-Xlinker", vendorPath,
                 ])
             ]
         ),

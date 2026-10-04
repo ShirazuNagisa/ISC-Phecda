@@ -55,6 +55,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     var routes: [ProxyRoute] = []
     var certificates: [CertificateInfo] = []
     var ddnsTasks: [DdnsTaskInfo] = []
+    var ipStatus: IPStatus?
     var credentials: [CredentialInfo] = []
     var settings: KernelSettings?
     var jobs: [JobInfo] = []
@@ -158,7 +159,7 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     private func clearData() {
         apps = []; runtimes = []; metrics = nil; advisories = []
-        routes = []; certificates = []; ddnsTasks = []; credentials = []
+        routes = []; certificates = []; ddnsTasks = []; credentials = []; ipStatus = nil
         jobs = []; events = []; settings = nil
     }
 
@@ -177,12 +178,14 @@ enum AppSection: String, CaseIterable, Identifiable {
         async let routesTask: [ProxyRoute]? = attempt { try await self.kernel.routes() }
         async let certsTask: [CertificateInfo]? = attempt { try await self.kernel.certificates() }
         async let ddnsTask: [DdnsTaskInfo]? = attempt { try await self.kernel.ddnsTasks() }
+        async let ipTask: IPStatus? = attempt { try await self.kernel.currentIP() }
         async let credentialsTask: [CredentialInfo]? = attempt { try await self.kernel.credentials() }
         async let settingsTask: KernelSettings? = attempt { try await self.kernel.settings() }
         async let advisoriesTask: [Advisory]? = attempt { try await self.kernel.advisories() }
         async let jobsTask: [JobInfo]? = attempt { try await self.kernel.jobs() }
 
         let results = await (appsTask, runtimesTask, routesTask, certsTask, ddnsTask, credentialsTask, settingsTask, advisoriesTask, jobsTask)
+        let currentIP = await ipTask
 
         guard running, generation == lifecycleGeneration else { return }
         if let value = results.0 { apps = value }
@@ -190,6 +193,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         if let value = results.2 { routes = value }
         if let value = results.3 { certificates = value }
         if let value = results.4 { ddnsTasks = value }
+        if let currentIP { ipStatus = currentIP }
         if let value = results.5 { credentials = value }
         if let value = results.6 {
             settings = value

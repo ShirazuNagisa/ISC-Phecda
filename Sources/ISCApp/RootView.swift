@@ -139,6 +139,7 @@ struct HomeView: View {
                 metricsSection
                 advisoriesSection
                 servicesSection
+                dnsSection
                 domainSection
             }
             .padding(22)
@@ -222,6 +223,81 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    /// 域名解析状态：当前公网地址 + 每条动态解析任务上次跑成什么样。
+    ///
+    /// 这两样要放在一起才有意义 —— "解析不对"要么是地址变了没更新，
+    /// 要么是更新失败了，单看其中一个都判断不出来。
+    @ViewBuilder private var dnsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(tr("域名解析", "DNS resolution")).font(.headline)
+            HStack(spacing: 10) {
+                Image(systemName: "network").foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tr("当前公网地址", "Current public address")).font(.caption).foregroundStyle(.secondary)
+                    Text(model.ipStatus?.summary ?? "—").font(.callout).monospacedDigit().textSelection(.enabled)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.25), in: .rect(cornerRadius: 10))
+
+            if model.ddnsTasks.isEmpty {
+                Text(tr("还没有动态解析任务；如果你的地址不常变，也可以手动维护解析。",
+                        "No dynamic-DNS tasks yet. If your address rarely changes you can maintain the records by hand."))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(model.ddnsTasks) { task in
+                    HStack(spacing: 10) {
+                        Image(systemName: ddnsSymbol(task)).foregroundStyle(ddnsTint(task))
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(task.label).font(.callout)
+                                if !task.enabled {
+                                    Text(tr("已停用", "disabled")).font(.caption2)
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(.quaternary, in: .capsule)
+                                }
+                            }
+                            Text(ddnsCaption(task)).font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.2), in: .rect(cornerRadius: 10))
+                }
+            }
+        }
+    }
+
+    private func ddnsSymbol(_ task: DdnsTaskInfo) -> String {
+        guard task.enabled else { return "pause.circle" }
+        switch task.lastStatus {
+        case "success": return "checkmark.circle.fill"
+        case "failed": return "exclamationmark.triangle.fill"
+        default: return "clock"
+        }
+    }
+
+    private func ddnsTint(_ task: DdnsTaskInfo) -> Color {
+        guard task.enabled else { return .secondary }
+        switch task.lastStatus {
+        case "success": return .green
+        case "failed": return .orange
+        default: return .secondary
+        }
+    }
+
+    private func ddnsCaption(_ task: DdnsTaskInfo) -> String {
+        if let message = task.lastMessage, !message.isEmpty { return message }
+        let address = [task.lastIpv4, task.lastIpv6].compactMap { $0 }.filter { !$0.isEmpty }
+        guard let last = task.lastRunAt else { return tr("尚未执行", "Never run") }
+        let stamp = last.formatted(date: .abbreviated, time: .shortened)
+        return address.isEmpty ? stamp : "\(address.joined(separator: " · ")) · \(stamp)"
     }
 
     @ViewBuilder private var domainSection: some View {

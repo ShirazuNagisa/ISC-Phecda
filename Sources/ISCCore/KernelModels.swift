@@ -257,6 +257,21 @@ public struct DdnsTaskList: Decodable, Sendable {
     public let items: [DdnsTaskInfo]
 }
 
+/// 本机当前的公网地址。
+///
+/// 首页要显示"域名现在解析到哪"，而那个答案的起点就是这里 ——
+/// 解析正确与否，取决于 DNS 里的地址和这张网卡上的地址是否一致。
+public struct IPStatus: Decodable, Sendable {
+    public let primaryIpv4: String?
+    public let primaryIpv6: String?
+    public let primaryPrefix: String?
+
+    public var summary: String {
+        let values = [primaryIpv4, primaryIpv6].compactMap { $0 }.filter { !$0.isEmpty }
+        return values.isEmpty ? "—" : values.joined(separator: " · ")
+    }
+}
+
 /// 一个 DNS 解析条目。
 public struct DNSRecord: Decodable, Sendable, Identifiable {
     public let id: String

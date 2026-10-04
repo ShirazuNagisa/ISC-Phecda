@@ -180,6 +180,10 @@ extension KernelClient {
         try await send("GET", "/v1/certs", body: Optional<Never>.none, as: CertificateList.self).items
     }
 
+    public func currentIP() async throws -> IPStatus {
+        try await send("GET", "/v1/ip/current", body: Optional<Never>.none, as: IPStatus.self)
+    }
+
     public func ddnsTasks() async throws -> [DdnsTaskInfo] {
         try await send("GET", "/v1/ddns-tasks", body: Optional<Never>.none, as: DdnsTaskList.self).items
     }

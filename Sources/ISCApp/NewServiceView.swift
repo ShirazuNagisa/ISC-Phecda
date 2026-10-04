@@ -274,7 +274,9 @@ struct FirstRunView: View {
 
             HStack {
                 Button(tr("先去添加凭据", "Add a credential first")) {
+                    // 直接开表单，而不是"跳到 DNS 页再让用户自己找按钮"。
                     model.section = .dns
+                    model.requestedSheet = .credentials
                     dismiss()
                 }
                 .buttonStyle(.glassProminent)

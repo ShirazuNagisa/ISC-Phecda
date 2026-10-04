@@ -71,7 +71,12 @@ struct SettingsView: View {
             .padding(16)
         }
         .frame(width: 560, height: 620)
-        .task { load() }
+        .task {
+            // 设置还没拉到时先拉一次。否则表单显示的是默认值，而"保存"
+            // 会把那些默认值当成用户的意图写回内核 —— 一次静默的覆盖。
+            if model.settings == nil { await model.refreshAll() }
+            load()
+        }
     }
 
     // MARK: 分区

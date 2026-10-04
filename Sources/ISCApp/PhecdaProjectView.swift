@@ -211,6 +211,9 @@ struct PhecdaProjectDetail: View {
                 let message = error.localizedDescription
                 try? await rollbackPublishedService(service)
                 try? await model.rollbackDeployment(deploymentID)
+                // The publish was rolled back, so the record and its kernel reference must
+                // not survive as an orphan; the deployment below is rewritten without it.
+                try? await model.removePublishedService(service.id)
                 let failure: JSONValue = .object(["id": .string(deploymentID.uuidString), "project_id": .string(project.id), "preset_id": .string(selectedPreset?["id"].string ?? ""), "state": .string("failed"), "last_error": .string(message)])
                 _ = try? await model.request("POST", "/v1/phecda/deployments", body: failure)
                 deploymentMessage = tr("公网绑定失败，已回滚本地部署：\(message)", "Public binding failed; local deployment rolled back: \(message)")

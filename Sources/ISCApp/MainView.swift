@@ -147,7 +147,8 @@ struct ServiceListView: View {
             Button(tr("加入服务", "Add service")) {
                 if let task = importCandidate {
                     let domains = Set((task["ipv4"]["domains"].array + task["ipv6"]["domains"].array).map(\.string)).sorted()
-                    model.addService(PublishedService(name: task["label"].string, kind: .dynamicDomain, domains: domains, ddnsID: task.id, order: model.services.count))
+                    let service = PublishedService(name: task["label"].string, kind: .dynamicDomain, domains: domains, ddnsID: task.id, order: model.services.count)
+                    model.execute { try await model.addService(service) }
                 }
                 importCandidate = nil
             }

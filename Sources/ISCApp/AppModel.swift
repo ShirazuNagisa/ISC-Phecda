@@ -30,22 +30,29 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
     private var refreshTask: Task<Void, Never>?
     private var lastNotification: [String: Date] = [:]
     private var lifecycleGeneration = 0
+    /// A `services.json` written by a build that predates kernel-owned records. It is read
+    /// once, imported, and thereafter only ever renamed — never written again.
+    private var legacyServices: [PublishedService] = []
+    /// Counts collection writes in flight, so a refresh triggered mid-write cannot mirror a
+    /// stale collection back over the change the user just made.
+    private var serviceWritesInFlight = 0
     let dataDirectory: URL
-    let archiveURL: URL
-    static let listPaths = ["/v1/providers", "/v1/credentials", "/v1/ddns-tasks", "/v1/proxy/routes", "/v1/proxy/status", "/v1/certs", "/v1/ip/current", "/v1/jobs", "/v1/settings", "/v1/notify/channels", "/v1/notify/deliveries", "/v1/audit", "/v1/reach/providers", "/v1/changes", "/v1/changes/pending", "/v1/changes/interrupted", "/v1/verify/sessions", "/v1/phecda/presets", "/v1/phecda/projects", "/v1/phecda/deployments"]
+    let legacyArchiveURL: URL
+    static let listPaths = ["/v1/providers", "/v1/credentials", "/v1/ddns-tasks", "/v1/proxy/routes", "/v1/proxy/status", "/v1/certs", "/v1/ip/current", "/v1/jobs", "/v1/settings", "/v1/notify/channels", "/v1/notify/deliveries", "/v1/audit", "/v1/reach/providers", "/v1/changes", "/v1/changes/pending", "/v1/changes/interrupted", "/v1/verify/sessions", "/v1/phecda/presets", "/v1/phecda/projects", "/v1/phecda/deployments", "/v1/public-services"]
 
     init(dataDirectory: URL? = nil) {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let phecdaRoot = support.appendingPathComponent("ISC Phecda", isDirectory: true)
         let oldRoot = support.appendingPathComponent("ISC", isDirectory: true)
         self.dataDirectory = dataDirectory ?? phecdaRoot.appendingPathComponent("Kernel", isDirectory: true)
-        archiveURL = phecdaRoot.appendingPathComponent("services.json")
+        legacyArchiveURL = phecdaRoot.appendingPathComponent("services.json")
         let bundleHelper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/PhecdaSupervisor")
         let siblingHelper = URL(fileURLWithPath: CommandLine.arguments.first ?? "").deletingLastPathComponent().appendingPathComponent("PhecdaSupervisor")
         let helper = FileManager.default.isExecutableFile(atPath: bundleHelper.path) ? bundleHelper : siblingHelper
         supervisorClient = try? SupervisorServiceClient(executableURL: helper, stateDirectory: phecdaRoot.appendingPathComponent("Supervisor", isDirectory: true))
         Self.migrateLegacyData(from: oldRoot, to: phecdaRoot)
-        do { services = try ServiceArchive.load(from: archiveURL).services }
+        // Only a read, and only to be imported once: the kernel owns published services now.
+        do { legacyServices = try ServiceArchive.load(from: legacyArchiveURL).services }
         catch { errorMessage = error.localizedDescription }
     }
     private static func migrateLegacyData(from oldRoot: URL, to newRoot: URL) {
@@ -122,6 +129,7 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
             phase = .running
             _ = try await request("PATCH", "/v1/settings", body: .object(["lang": .string(Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "zh-CN" : "en")]))
             await refreshAll()
+            await importLegacyServices()
             beginEvents()
         } catch { phase = .failed; errorMessage = error.localizedDescription }
     }
@@ -143,6 +151,16 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
             do { _ = try await fetch(path) }
             catch { datasets[path] = .object(["client_error": .string(error.localizedDescription)]) }
         }
+        mirrorServicesFromKernel()
+    }
+    /// Mirrors the kernel's collection into the UI model.
+    ///
+    /// Skipped while a write is in flight, and skipped when the fetch failed: a collection
+    /// that did not load must not read as "the user has no published services", which would
+    /// blank the list and could be saved back over the real records.
+    private func mirrorServicesFromKernel() {
+        guard serviceWritesInFlight == 0, let collection = datasets["/v1/public-services"], collection["client_error"] == .null else { return }
+        services = PublishedService.kernelCollection(from: collection)
     }
     private func beginEvents() {
         eventTask?.cancel()
@@ -189,24 +207,88 @@ enum KernelPhase { case stopped, starting, running, stopping, failed }
         do { notificationsEnabled = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) }
         catch { errorMessage = error.localizedDescription }
     }
-    func saveServices() {
-        do { try ServiceArchive(services: services).save(to: archiveURL) }
-        catch { errorMessage = error.localizedDescription }
+    // MARK: - Published services
+    //
+    // The records live in ISC-Core (`/v1/public-services`), which is the only writer. That is
+    // what makes a deployment's `public_service_id` trustworthy: the kernel clears it in the
+    // same transaction that drops a service, so this side has nothing to clean up and cannot
+    // forget to. Materializing the binding still goes through the kernel's own DDNS,
+    // reverse-proxy and certificate APIs.
+
+    /// Writes the whole collection back to the kernel.
+    ///
+    /// Replacement rather than per-record edits, matching how the kernel stores it: the set is
+    /// validated as a unit (duplicate ids, one domain claimed twice), and the reply is mirrored
+    /// back so local state is exactly what the kernel holds rather than an optimistic guess.
+    func saveServices() async throws {
+        // The kernel is the store of record, so an edit with the kernel stopped cannot be
+        // saved. Say so rather than dropping the user's action silently.
+        guard running else {
+            errorMessage = tr("内核未运行，改动未保存。", "The kernel is not running, so the change was not saved.")
+            return
+        }
+        serviceWritesInFlight += 1
+        defer { serviceWritesInFlight -= 1 }
+        let saved = try await request("PUT", "/v1/public-services", body: PublishedService.kernelCollection(services))
+        datasets["/v1/public-services"] = saved
+        services = PublishedService.kernelCollection(from: saved)
     }
-    func addService(_ service: PublishedService) { services.append(service); saveServices() }
+
+    /// Persists a local edit made by a control that cannot await. The UI already shows the
+    /// change; a rejected write surfaces as an error and the next refresh restores the
+    /// kernel's version.
+    private func persistServices() {
+        execute { try await self.saveServices() }
+    }
+
+    func addService(_ service: PublishedService) async throws {
+        services.append(service)
+        try await saveServices()
+    }
+
     func toggleFavorite(_ id: UUID) {
         guard let index = services.firstIndex(where: { $0.id == id }) else { return }
-        services[index].favorite.toggle(); saveServices()
+        services[index].favorite.toggle(); persistServices()
     }
-    func removeServiceOrganization(_ id: UUID) { services.removeAll { $0.id == id }; saveServices() }
+
+    /// Removes a published service. The kernel clears any deployment reference to it in the
+    /// same transaction, so there is nothing to unbind here.
+    func removePublishedService(_ id: UUID) async throws {
+        services.removeAll { $0.id == id }
+        try await saveServices()
+    }
+
     func moveService(_ id: UUID, by offset: Int) {
         var list = orderedServices
         guard let old = list.firstIndex(where: { $0.id == id }) else { return }
         let new = max(0, min(list.count - 1, old + offset))
         list.swapAt(old, new)
         for index in list.indices { list[index].order = index }
-        services = list; saveServices()
+        services = list; persistServices()
     }
+
+    /// Persists an edited record (rename, verification stamp) made in place by a view.
+    func serviceEdited() { persistServices() }
+
+    /// Imports a pre-kernel `services.json` exactly once.
+    ///
+    /// Only into an empty collection: if the kernel already holds services, this build has
+    /// either migrated already or the user created them since, and importing on top would
+    /// duplicate records. The file is renamed rather than deleted, so nothing is destroyed if
+    /// the import turns out to be wrong.
+    func importLegacyServices() async {
+        guard running, services.isEmpty, !legacyServices.isEmpty else { return }
+        do {
+            services = legacyServices
+            try await saveServices()
+            try? FileManager.default.moveItem(at: legacyArchiveURL, to: legacyArchiveURL.appendingPathExtension("migrated"))
+            notice = tr("已将 \(legacyServices.count) 个已发布服务迁移到内核。", "Moved \(legacyServices.count) published service(s) into the kernel.")
+        } catch {
+            services = []
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func ddns(for service: PublishedService) -> JSONValue? { items("/v1/ddns-tasks").first { $0.id == service.ddnsID } }
     func route(for service: PublishedService) -> JSONValue? { items("/v1/proxy/routes").first { $0.id == service.routeID } }
     func fingerprint(for service: PublishedService) -> String {

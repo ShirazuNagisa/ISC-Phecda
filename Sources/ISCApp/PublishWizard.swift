@@ -57,7 +57,7 @@ struct PublishWizard: View {
                 let saved = try await model.request("PUT", "/v1/proxy/routes", body: .object(["items": .array(routes)])); routeID = saved.items.first(where: { $0["label"].string == name })?.id ?? route.id; completed.append(tr("代理规则", "Proxy route"))
             }
             let service = PublishedService(name: name, kind: kind, domains: [domain], ddnsID: task.id, routeID: routeID, order: model.services.count)
-            model.addService(service); await model.refreshAll(); dismiss(); onVerify?(service)
+            try await model.addService(service); await model.refreshAll(); dismiss(); onVerify?(service)
         } catch let publishError { self.error = publishError.localizedDescription }
     }
 }

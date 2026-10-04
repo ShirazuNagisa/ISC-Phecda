@@ -74,7 +74,7 @@ struct ServiceDetail: View {
         .sheet(isPresented: $showVerify) { ServiceVerification(model: model, serviceID: current.id) }
         .alert(tr("重命名服务", "Rename service"), isPresented: $showRename) {
             TextField(tr("名称", "Name"), text: $name)
-            Button(tr("保存", "Save")) { if let index = model.services.firstIndex(where: { $0.id == current.id }), !name.trimmingCharacters(in: .whitespaces).isEmpty { model.services[index].name = name; model.saveServices() } }
+            Button(tr("保存", "Save")) { if let index = model.services.firstIndex(where: { $0.id == current.id }), !name.trimmingCharacters(in: .whitespaces).isEmpty { model.services[index].name = name; model.serviceEdited() } }
             Button(tr("取消", "Cancel"), role: .cancel) {}
         }
     }
@@ -136,7 +136,7 @@ struct DeleteServiceSheet: View {
                 else { _ = try await model.request("DELETE", "/v1/ddns-tasks/\(KernelClient.pathComponent(taskID))") }
                 removeDDNS = false
             }
-            model.removeServiceOrganization(service.id)
+            try await model.removePublishedService(service.id)
             await model.refreshAll(); dismiss()
         } catch { self.error = error.localizedDescription }
     }
@@ -183,7 +183,7 @@ struct ServiceVerification: View {
                     guard !Task.isCancelled else { return }
                     session = updated
                     if updated["status"].string == "reachable" {
-                        if let index = model.services.firstIndex(where: { $0.id == serviceID }) { model.services[index].verifiedAt = Date(); model.services[index].verifiedFingerprint = model.fingerprint(for: model.services[index]); model.saveServices() }
+                        if let index = model.services.firstIndex(where: { $0.id == serviceID }) { model.services[index].verifiedAt = Date(); model.services[index].verifiedFingerprint = model.fingerprint(for: model.services[index]); model.serviceEdited() }
                         return
                     }
                     if ["unreachable", "stopped"].contains(updated["status"].string) { return }

@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+"$ROOT/Scripts/verify-vendor.sh"
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)"
 APP="$ROOT/Build/ISC Phecda.app"

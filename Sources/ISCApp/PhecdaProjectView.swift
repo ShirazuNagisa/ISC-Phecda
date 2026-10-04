@@ -141,11 +141,11 @@ struct PhecdaProjectDetail: View {
             guard let projectID else { deploymentMessage = tr("项目 ID 无效。", "The project ID is invalid."); return }
             var dockerStarted = false
             var dockerName = ""
+            let localPort = Int(preset["default_port"].number)
+            let deploymentIdentifier = UUID()
             do {
-                let deploymentIdentifier = UUID()
                 let mode = project["source"]["mode"].string
                 let value = project["source"]["value"].string
-                let localPort = Int(preset["default_port"].number)
                 let state = "preparing"
                 let deployment = try await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string(state), "local_port": .number(Double(localPort))]))
                 deploymentID = UUID(uuidString: deployment["id"].string)
@@ -163,6 +163,7 @@ struct PhecdaProjectDetail: View {
                     dockerName = project["name"].string
                     _ = try await model.dockerSupervisor.start(source: source, name: dockerName, ports: [localPort], waitForReady: true)
                     dockerStarted = true
+                    _ = try await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string("running"), "local_port": .number(Double(localPort))]))
                 } else {
                     guard mode == "directory" else { throw DeploymentPlanError.invalidPlan }
                     let workspace = URL(fileURLWithPath: value, isDirectory: true)
@@ -183,6 +184,7 @@ struct PhecdaProjectDetail: View {
                 _ = try await model.fetch("/v1/phecda/deployments")
             } catch {
                 if dockerStarted { try? await model.dockerSupervisor.stop(name: dockerName, remove: true) }
+                _ = try? await model.request("POST", "/v1/phecda/deployments", body: .object(["id": .string(deploymentIdentifier.uuidString), "project_id": .string(projectID.uuidString), "preset_id": .string(preset["id"].string), "state": .string("failed"), "local_port": .number(Double(localPort)), "last_error": .string(error.localizedDescription)]))
                 deploymentMessage = error.localizedDescription
             }
         }

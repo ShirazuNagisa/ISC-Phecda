@@ -51,7 +51,7 @@ struct DNSView: View {
         }
         .sheet(isPresented: $showingAdd) {
             if let credentialID, let zone {
-                RecordFormView(zone: zone, existing: nil) { request in
+                RecordFormView(zone: zoneLabel, existing: nil) { request in
                     _ = try await model.kernel.createRecord(credentialID: credentialID, zone: zone, request)
                     await loadRecords()
                 }
@@ -59,7 +59,7 @@ struct DNSView: View {
         }
         .sheet(item: $editing) { record in
             if let credentialID, let zone {
-                RecordFormView(zone: zone, existing: record) { request in
+                RecordFormView(zone: zoneLabel, existing: record) { request in
                     _ = try await model.kernel.updateRecord(credentialID: credentialID, zone: zone,
                                                             recordID: record.id, request)
                     await loadRecords()
@@ -67,6 +67,14 @@ struct DNSView: View {
             }
         }
         .task(id: model.credentials.count) { await bootstrap() }
+    }
+
+    /// 当前选中区域的名字；只用于显示。
+    ///
+    /// `zone` 存的是区域 ID（接口要的就是它），但界面上该给用户看名字。
+    private var zoneLabel: String {
+        guard let zone else { return "" }
+        return zones.first { $0.id == zone }?.name ?? zone
     }
 
     private var pickers: some View {
@@ -79,10 +87,13 @@ struct DNSView: View {
             }
             .frame(maxWidth: 260)
 
+            // 标签显示区域名（用户认的是名字），值用区域 ID ——
+            // 契约里的路径参数是 zoneId，而 Cloudflare 这类服务商
+            // 只认 ID，把名字当 ID 发过去会得到一条看不懂的上游 404。
             Picker(tr("区域", "Zone"), selection: $zone) {
                 Text(tr("请选择", "Select")).tag(String?.none)
                 ForEach(zones) { item in
-                    Text(item.name).tag(String?.some(item.name))
+                    Text(item.name).tag(String?.some(item.id))
                 }
             }
             .frame(maxWidth: 240)
@@ -166,7 +177,7 @@ struct DNSView: View {
         failure = nil
         do {
             zones = try await model.kernel.zones(credentialID: credentialID)
-            zone = zones.first?.name
+            zone = zones.first?.id
         } catch {
             zones = []
             zone = nil

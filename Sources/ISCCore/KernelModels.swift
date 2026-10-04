@@ -175,11 +175,19 @@ public struct MetricsSnapshot: Decodable, Sendable {
 
 // MARK: - 建议
 
+/// 一条建议可以做的事。
+///
+/// 两种形态：**跳转到界面某处**（`navigation`），或**发一次 API 调用**
+/// （`method` + `path`）。前者用于"需要用户填点什么"的情况 —— 早先只有后者，
+/// 于是"去添加凭据"只能伪装成一个不带请求体的 POST，点下去必然 400。
 public struct AdvisoryAction: Decodable, Sendable {
     public let label: String
-    public let method: String
-    public let path: String
+    public let navigation: String?
+    public let method: String?
+    public let path: String?
     public let body: JSONValue?
+
+    public var isNavigation: Bool { navigation != nil }
 }
 
 public struct Advisory: Decodable, Sendable, Identifiable {
@@ -239,18 +247,61 @@ public struct CertificateList: Decodable, Sendable {
     public let items: [CertificateInfo]
 }
 
+/// 一种记录类型从哪里取地址。
+///
+/// `netInterface` 走内核自己的地址快照（已过滤掉不能用于公网的地址），
+/// `url` / `cmd` 是用户自己指定的来源。
+public struct DdnsSource: Codable, Sendable {
+    public var enable: Bool
+    /// `netInterface` / `url` / `cmd`。
+    public var getType: String
+    public var value: String
+    public var domains: [String]
+    /// 仅 IPv6 使用：地址选择器。
+    public var selector: String?
+
+    public init(enable: Bool, getType: String = "netInterface", value: String = "",
+                domains: [String] = [], selector: String? = nil) {
+        self.enable = enable
+        self.getType = getType
+        self.value = value
+        self.domains = domains
+        self.selector = selector
+    }
+
+    public var isAutomatic: Bool { getType == "netInterface" && value.isEmpty }
+}
+
+/// 一个动态解析任务。
+///
+/// ⚠️ `ipv4` / `ipv6` 是**对象**不是字符串。此前这里写成了 `String?`，于是
+/// 解码必然抛错，而调用方用 `attempt` 把错误吞掉了 —— 结果就是首页的
+/// "动态解析"永远显示"还没有任务"，即使内核里明明有。这类静默失败说明
+/// "吞掉解码错误"这个便利是有代价的，因此补了解码测试。
 public struct DdnsTaskInfo: Decodable, Sendable, Identifiable {
     public let id: String
     public let credentialId: String
     public let label: String
     public let enabled: Bool
-    public let ipv4: String?
-    public let ipv6: String?
+    public let ipv4: DdnsSource?
+    public let ipv6: DdnsSource?
+    public let ttl: String?
+    public let httpInterface: String?
     public let lastRunAt: Date?
     public let lastStatus: String?
     public let lastMessage: String?
     public let lastIpv4: String?
     public let lastIpv6: String?
+
+    /// 这个任务在更新的域名。
+    public var domains: [String] {
+        let all = (ipv4?.domains ?? []) + (ipv6?.domains ?? [])
+        var seen = Set<String>()
+        return all.filter { seen.insert($0).inserted }
+    }
+
+    public var updatesIPv4: Bool { ipv4?.enable == true }
+    public var updatesIPv6: Bool { ipv6?.enable == true }
 }
 
 public struct DdnsTaskList: Decodable, Sendable {
@@ -297,13 +348,107 @@ public struct DNSZoneList: Decodable, Sendable {
     public let items: [DNSZone]
 }
 
+/// 服务商声明的能力。
+///
+/// 界面据此决定**显示什么**，而不是靠服务商名字去猜：不能列区域的凭据
+/// 不该出现"选择区域"这一步，不能签证书的不该被选进 ACME 配置里。
+public struct ProviderCapabilities: Decodable, Sendable {
+    public let available: Bool
+    public let verify: Bool
+    public let dynamic: Bool
+    public let zoneList: Bool
+    public let recordList: Bool
+    public let recordCreate: Bool
+    public let recordUpdate: Bool
+    public let recordDelete: Bool
+    public let allRecordTypes: Bool
+    public let customTtl: Bool
+    public let proxy: Bool
+    /// 能否用于 DNS-01 校验（也就是能不能签证书）。
+    public let dns01: Bool
+
+    public var canManageRecords: Bool { zoneList && recordList }
+
+    // 手写 init 会抑制合成的 CodingKeys，因此显式声明。
+    // 名字用驼峰：解码器开的是 convertFromSnakeCase，它先把 JSON 的
+    // zone_list 转成 zoneList，再来匹配这里的键。
+    private enum CodingKeys: String, CodingKey {
+        case available, verify, dynamic, zoneList, recordList
+        case recordCreate, recordUpdate, recordDelete
+        case allRecordTypes, customTtl, proxy, dns01
+    }
+
+    /// 缺字段一律按 `false` 处理。
+    ///
+    /// 契约里这些布尔量都是可选的，而合成的解码器会因为**其中一个**缺失
+    /// 就让整份服务商目录解不出来 —— 一个界面根本不关心的小字段（比如
+    /// `all_record_types`）能把"添加凭据"整页打空。这与 `DdnsTaskInfo`
+    /// 那次是同一类错误：严格模型套在宽松契约上。
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        func flag(_ key: CodingKeys) -> Bool { (try? container.decodeIfPresent(Bool.self, forKey: key)) ?? false }
+        available = flag(.available)
+        verify = flag(.verify)
+        dynamic = flag(.dynamic)
+        zoneList = flag(.zoneList)
+        recordList = flag(.recordList)
+        recordCreate = flag(.recordCreate)
+        recordUpdate = flag(.recordUpdate)
+        recordDelete = flag(.recordDelete)
+        allRecordTypes = flag(.allRecordTypes)
+        customTtl = flag(.customTtl)
+        proxy = flag(.proxy)
+        dns01 = flag(.dns01)
+    }
+}
+
+/// 凭据表单里的一个字段，由服务商声明。
+///
+/// 界面因此不需要为每家的 API Key / Secret / Token 写一套表单 ——
+/// 加一个服务商不需要改 GUI。
+public struct ProviderField: Decodable, Sendable, Identifiable {
+    public let key: String
+    public let label: String
+    public let secret: Bool
+    public let required: Bool
+    public let placeholder: String?
+    public let help: String?
+    public let example: String?
+    public var id: String { key }
+}
+
+public struct Provider: Decodable, Sendable, Identifiable {
+    public let name: String
+    public let displayName: String
+    public let tier: Int?
+    public let capabilities: ProviderCapabilities
+    public let credentialFields: [ProviderField]
+    public var id: String { name }
+}
+
+public struct ProviderList: Decodable, Sendable {
+    public let items: [Provider]
+}
+
+public struct CredentialVerifyResult: Decodable, Sendable {
+    public let ok: Bool
+    public let message: String
+}
+
 public struct CredentialInfo: Decodable, Sendable, Identifiable {
     public let id: String
     public let provider: String
     public let label: String
+    public let capabilities: ProviderCapabilities?
     public let lastVerifiedAt: Date?
     public let lastVerifyOk: Bool?
     public let lastVerifyError: String?
+
+    /// 校验状态的三种呈现：没校验过、通过、失败。
+    public var verifyState: String {
+        guard lastVerifiedAt != nil else { return "unverified" }
+        return lastVerifyOk == true ? "ok" : "failed"
+    }
 }
 
 public struct CredentialList: Decodable, Sendable {

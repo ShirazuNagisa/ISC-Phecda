@@ -27,6 +27,20 @@ struct DNSView: View {
         .toolbar {
             ToolbarItem {
                 Button {
+                    model.requestedSheet = .ddns
+                } label: {
+                    Label(tr("动态解析", "Dynamic DNS"), systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+            ToolbarItem {
+                Button {
+                    model.requestedSheet = .credentials
+                } label: {
+                    Label(tr("凭据", "Credentials"), systemImage: "key")
+                }
+            }
+            ToolbarItem {
+                Button {
                     showingAdd = true
                 } label: {
                     Label(tr("添加解析", "Add record"), systemImage: "plus")
@@ -82,7 +96,8 @@ struct DNSView: View {
             EmptyHint(symbol: "key",
                       title: tr("还没有 DNS 凭据", "No DNS credential yet"),
                       message: tr("添加一个 DNS 服务商的凭据，才能管理解析与签发证书。",
-                                  "Add a DNS provider credential to manage records and issue certificates."))
+                                  "Add a DNS provider credential to manage records and issue certificates."),
+                      action: (tr("添加凭据", "Add a credential"), { model.requestedSheet = .credentials }))
         } else if let failure {
             EmptyHint(symbol: "exclamationmark.triangle",
                       title: tr("读取失败", "Could not load"),

@@ -200,7 +200,7 @@ struct NewServiceView: View {
         busy = true
         failure = nil
         do {
-            if model.presets.isEmpty { await model.loadPresets() }
+            if model.presets.isEmpty { await model.loadCatalogs() }
             let result = try await model.kernel.inspectSource(path: path)
             inspection = result
             presetID = result.recommendedPresetId

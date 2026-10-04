@@ -5,6 +5,15 @@ import UserNotifications
 
 enum KernelPhase: Equatable { case stopped, starting, running, stopping, failed }
 
+/// 建议动作可以要求打开的界面。
+///
+/// 取值与内核的 `AdvisoryActionNavigation` 一一对应；对不上的取值会被忽略
+/// （旧内核 + 新界面，或反过来），而不是崩掉。
+enum RequestedSheet: String, Identifiable {
+    case credentials, settings, ddns
+    var id: String { rawValue }
+}
+
 /// 界面左侧的三个分区。
 ///
 /// v0.2.0 的界面只有这三块：首页（概览与建议）、服务（发布与查看）、
@@ -57,6 +66,8 @@ enum AppSection: String, CaseIterable, Identifiable {
     var ddnsTasks: [DdnsTaskInfo] = []
     var ipStatus: IPStatus?
     var credentials: [CredentialInfo] = []
+    /// 服务商目录：字段定义与能力都由内核声明，界面据此生成表单。
+    var providers: [ISCCore.Provider] = []
     var settings: KernelSettings?
     var jobs: [JobInfo] = []
     var events: [JSONValue] = []
@@ -66,6 +77,11 @@ enum AppSection: String, CaseIterable, Identifiable {
     var section: AppSection = .home
     var selectedAppID: String?
     var showingNewService = false
+    /// 建议动作要求界面跳到某处时记在这里，由 RootView 负责呈现。
+    ///
+    /// 用"请求"而不是直接打开：模型不该持有视图，而视图也不该去猜
+    /// 内核给的 navigation 字符串对应哪个界面。
+    var requestedSheet: RequestedSheet?
     var showOnboarding = false
     var notificationsEnabled = false
 
@@ -127,7 +143,7 @@ enum AppSection: String, CaseIterable, Identifiable {
             var patch = KernelSettings()
             patch.lang = kernelLanguage
             _ = try? await kernel.updateSettings(patch)
-            await loadPresets()
+            await loadCatalogs()
             await refreshAll()
             beginEvents()
             beginMetricsPolling()
@@ -160,7 +176,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     private func clearData() {
         apps = []; runtimes = []; metrics = nil; advisories = []
         routes = []; certificates = []; ddnsTasks = []; credentials = []; ipStatus = nil
-        jobs = []; events = []; settings = nil
+        jobs = []; events = []; settings = nil; providers = []
     }
 
     // MARK: 刷新
@@ -203,11 +219,17 @@ enum AppSection: String, CaseIterable, Identifiable {
         if let value = results.8 { jobs = value }
     }
 
-    /// 预设目录不常变，但与内核语言绑定，因此每次启动后取一次即可。
-    func loadPresets() async {
+    /// 目录类数据（预设、服务商）在内核运行期是固定的，取一次即可。
+    ///
+    /// 但界面可能在内核启动之前就打开（或者启动失败后重试），因此这个方法
+    /// 要能被重复调用而不产生副作用。
+    func loadCatalogs() async {
         guard running else { return }
         if let loaded: [PresetInfo] = await attempt({ try await self.kernel.presets() }) {
             presets = loaded
+        }
+        if let loaded: [ISCCore.Provider] = await attempt({ try await self.kernel.providers() }) {
+            providers = loaded
         }
     }
 
@@ -286,6 +308,10 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     func apply(_ advisory: Advisory) {
         guard let action = advisory.action else { return }
+        if let navigation = action.navigation {
+            requestedSheet = RequestedSheet(rawValue: navigation)
+            return
+        }
         execute { try await self.kernel.runAdvisoryAction(action) }
     }
 

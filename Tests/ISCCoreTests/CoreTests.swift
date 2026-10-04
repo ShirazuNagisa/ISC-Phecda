@@ -177,3 +177,118 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
 @Test func versionGuardNamesTheVersionItNeeds() {
     #expect(KernelClient.requiredAPIVersion == "v2")
 }
+
+// MARK: - 解码：内核真实发过来的形状
+
+// 这一组是补出来的。此前 `DdnsTaskInfo.ipv4` 被写成了 `String?`，而内核发的
+// 是**对象** —— 解码必然抛错，而调用方用 `attempt` 把错误吞掉了，于是首页的
+// "动态解析"永远显示"还没有任务"，即使内核里明明有。
+//
+// 教训是："吞掉解码错误"这个便利是有代价的：契约与模型对不上时不会有人
+// 发现。因此下面用的是内核真实会发的形状。
+@Test func ddnsTaskDecodingHandlesObjectSources() throws {
+    let json = """
+    {"items":[{
+      "id":"t1","credential_id":"c1","label":"家里的 IPv6","enabled":true,
+      "ipv4":{"enable":false,"get_type":"netInterface","value":"","domains":[]},
+      "ipv6":{"enable":true,"get_type":"netInterface","value":"","domains":["home.example.com","www.example.com"],
+              "selector":"@2"},
+      "ttl":"600","http_interface":"en0",
+      "last_run_at":"2026-10-04T07:49:09Z","last_status":"success","last_message":"",
+      "last_ipv4":"1.2.3.4","last_ipv6":"2001:db8::1",
+      "created_at":"2026-10-01T00:00:00Z","updated_at":"2026-10-04T07:49:09Z"
+    }]}
+    """
+    let list = try decode(DdnsTaskList.self, json)
+    let task = try #require(list.items.first)
+    #expect(task.label == "家里的 IPv6")
+    #expect(task.updatesIPv6)
+    #expect(task.updatesIPv4 == false)
+    #expect(task.domains == ["home.example.com", "www.example.com"])
+    #expect(task.ipv6?.selector == "@2")
+    #expect(task.ttl == "600")
+    #expect(task.lastIpv6 == "2001:db8::1")
+    #expect(task.lastRunAt != nil)
+}
+
+@Test func ddnsTaskDecodingToleratesMissingOptionalSources() throws {
+    // 只要必填字段在，可选的来源缺失不该让整份列表解不出来。
+    let json = """
+    {"items":[{"id":"t1","credential_id":"c1","label":"x","enabled":false,
+               "created_at":"2026-10-01T00:00:00Z","updated_at":"2026-10-01T00:00:00Z"}]}
+    """
+    let list = try decode(DdnsTaskList.self, json)
+    let task = try #require(list.items.first)
+    #expect(task.ipv4 == nil && task.ipv6 == nil)
+    #expect(task.domains.isEmpty)
+    #expect(task.enabled == false)
+}
+
+@Test func providerDecodingCarriesCapabilitiesAndFields() throws {
+    let json = """
+    {"items":[{"name":"cloudflare","display_name":"Cloudflare","tier":1,
+      "capabilities":{"available":true,"verify":true,"dynamic":true,"zone_list":true,
+                      "record_list":true,"record_create":true,"record_update":true,
+                      "record_delete":true,"dns01":true},
+      "credential_fields":[
+        {"key":"token","label":"API Token","secret":true,"required":true,"help":"需要 Zone:DNS:Edit 权限"},
+        {"key":"account","label":"Account","secret":false,"required":false}
+      ]}]}
+    """
+    let list = try decode(ProviderList.self, json)
+    let provider = try #require(list.items.first)
+    #expect(provider.capabilities.dns01)
+    #expect(provider.capabilities.canManageRecords)
+    #expect(provider.credentialFields.count == 2)
+    #expect(provider.credentialFields[0].secret)
+    #expect(provider.credentialFields[1].required == false)
+    #expect(provider.credentialFields[0].help == "需要 Zone:DNS:Edit 权限")
+}
+
+@Test func credentialDecodingIncludesVerificationState() throws {
+    let json = """
+    {"items":[{"id":"c1","provider":"cloudflare","label":"我的CF",
+               "capabilities":{"available":true,"verify":true,"dynamic":true,"zone_list":true,
+                               "record_list":true,"record_create":true,"record_update":true,
+                               "record_delete":true,"dns01":true},
+               "last_verified_at":"2026-10-04T07:00:00Z","last_verify_ok":false,
+               "last_verify_error":"invalid token"}]}
+    """
+    let list = try decode(CredentialList.self, json)
+    let credential = try #require(list.items.first)
+    #expect(credential.verifyState == "failed")
+    #expect(credential.capabilities?.dns01 == true)
+    #expect(credential.lastVerifyError == "invalid token")
+}
+
+@Test func credentialWithoutCapabilitiesIsStillUsable() throws {
+    // 老内核可能不发 capabilities；界面应当降级而不是整份列表解不出来。
+    let json = #"{"items":[{"id":"c1","provider":"x","label":"y"}]}"#
+    let list = try decode(CredentialList.self, json)
+    #expect(list.items.first?.capabilities == nil)
+    #expect(list.items.first?.verifyState == "unverified")
+}
+
+// 行动作的两种形态。
+@Test func advisoryActionDecodesBothKinds() throws {
+    let navigation = """
+    {"items":[{"id":"first_run_setup","severity":"info","title":"先添加凭据",
+      "action":{"label":"去添加","navigation":"credentials"}}]}
+    """
+    let list = try decode(AdvisoryList.self, navigation)
+    let action = try #require(list.items.first?.action)
+    #expect(action.isNavigation)
+    #expect(action.navigation == "credentials")
+    #expect(action.method == nil)
+
+    let call = """
+    {"items":[{"id":"proxy_disabled","severity":"blocking","title":"反代没开",
+      "action":{"label":"启用","method":"PATCH","path":"/v1/settings",
+                "body":{"proxy_enabled":true}}}]}
+    """
+    let callList = try decode(AdvisoryList.self, call)
+    let callAction = try #require(callList.items.first?.action)
+    #expect(callAction.isNavigation == false)
+    #expect(callAction.method == "PATCH")
+    #expect(callAction.body?["proxy_enabled"] == .bool(true))
+}

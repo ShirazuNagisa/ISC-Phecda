@@ -19,6 +19,16 @@ struct RootView: View {
         .sheet(isPresented: $model.showOnboarding) {
             FirstRunView(model: model)
         }
+        .sheet(item: $model.requestedSheet) { sheet in
+            switch sheet {
+            case .credentials:
+                CredentialListView(model: model)
+            case .settings:
+                SettingsView(model: model)
+            case .ddns:
+                DDNSTaskListView(model: model)
+            }
+        }
     }
 
     private var sidebar: some View {
@@ -34,6 +44,16 @@ struct RootView: View {
                     Label(tr("反向代理未启用", "Reverse proxy off"), systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange)
                 }
+            }
+            // 设置放在侧栏底部而不是第四个分区：侧栏只有三块是产品决定，
+            // 而设置是偶尔用一次的东西。
+            Section {
+                Button {
+                    model.requestedSheet = .settings
+                } label: {
+                    Label(tr("设置", "Settings"), systemImage: "gearshape")
+                }
+                .buttonStyle(.plain)
             }
         }
         .listStyle(.sidebar)

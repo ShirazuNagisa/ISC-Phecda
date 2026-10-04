@@ -160,10 +160,15 @@ extension KernelClient {
         try await send("GET", "/v1/advisories", body: Optional<Never>.none, as: AdvisoryList.self).items
     }
 
-    /// 执行一条建议自带的一键修复动作。
+    /// 执行一条建议自带的修复动作。
+    ///
+    /// 只处理"发一次调用"那一类；跳转类的动作由界面自己处理 —— 内核不该
+    /// 假装知道界面长什么样。
     public func runAdvisoryAction(_ action: AdvisoryAction) async throws {
-        let body = try action.body?.text()
-        _ = try await callRaw(action.method, action.path, body: body)
+        guard let method = action.method, let path = action.path else {
+            throw KernelError(code: "not_a_call", message: "This suggestion navigates instead of calling an endpoint.")
+        }
+        _ = try await callRaw(method, path, body: try action.body?.text())
     }
 
     // MARK: - DNS 与公网侧
@@ -188,12 +193,49 @@ extension KernelClient {
         try await send("GET", "/v1/ddns-tasks", body: Optional<Never>.none, as: DdnsTaskList.self).items
     }
 
+    public func createDdnsTask(_ input: DdnsTaskInput) async throws -> DdnsTaskInfo {
+        try await send("POST", "/v1/ddns-tasks", body: input, as: DdnsTaskInfo.self)
+    }
+
+    public func updateDdnsTask(id: String, _ input: DdnsTaskInput) async throws -> DdnsTaskInfo {
+        try await send("PATCH", "/v1/ddns-tasks/\(Self.pathComponent(id))", body: input, as: DdnsTaskInfo.self)
+    }
+
+    public func deleteDdnsTask(id: String) async throws {
+        try await sendIgnoringReply("DELETE", "/v1/ddns-tasks/\(Self.pathComponent(id))")
+    }
+
     public func runDdnsTask(_ id: String) async throws {
         try await sendIgnoringReply("POST", "/v1/ddns-tasks/\(Self.pathComponent(id))/run")
     }
 
     public func credentials() async throws -> [CredentialInfo] {
         try await send("GET", "/v1/credentials", body: Optional<Never>.none, as: CredentialList.self).items
+    }
+
+    public func providers() async throws -> [Provider] {
+        try await send("GET", "/v1/providers", body: Optional<Never>.none, as: ProviderList.self).items
+    }
+
+    public func createCredential(_ input: CredentialInput) async throws -> CredentialInfo {
+        try await send("POST", "/v1/credentials", body: input, as: CredentialInfo.self)
+    }
+
+    public func updateCredential(id: String, _ input: CredentialInput) async throws -> CredentialInfo {
+        try await send("PATCH", "/v1/credentials/\(Self.pathComponent(id))", body: input, as: CredentialInfo.self)
+    }
+
+    public func deleteCredential(id: String) async throws {
+        try await sendIgnoringReply("DELETE", "/v1/credentials/\(Self.pathComponent(id))")
+    }
+
+    /// 校验凭据是否可用。
+    ///
+    /// 它**总是返回结果**（`ok: false` 也是一种结果），因此不要把
+    /// `ok == false` 当成请求失败：前者是"这个凭据不可用"，后者是"请求本身
+    /// 有问题"，两者对用户的意义完全不同。
+    public func verifyCredential(id: String) async throws -> CredentialVerifyResult {
+        try await send("POST", "/v1/credentials/\(Self.pathComponent(id))/verify", body: Optional<Never>.none, as: CredentialVerifyResult.self)
     }
 
     /// 列出某个凭据下的 DNS 区域。
@@ -253,6 +295,35 @@ public struct AppCreateRequest: Encodable, Sendable {
         self.name = name
         self.presetId = presetId
         self.sourcePath = sourcePath
+    }
+}
+
+/// 新建或更新一个动态解析任务。
+public struct DdnsTaskInput: Encodable, Sendable {
+    public var credentialId: String
+    public var label: String
+    public var enabled: Bool?
+    public var ipv4: DdnsSource?
+    public var ipv6: DdnsSource?
+    public var ttl: String?
+    public var httpInterface: String?
+
+    public init(credentialId: String, label: String) {
+        self.credentialId = credentialId
+        self.label = label
+    }
+}
+
+/// 新建或更新一个 DNS 服务商凭据。
+public struct CredentialInput: Encodable, Sendable {
+    public var provider: String
+    public var label: String
+    public var fields: [String: String]
+
+    public init(provider: String, label: String, fields: [String: String]) {
+        self.provider = provider
+        self.label = label
+        self.fields = fields
     }
 }
 

@@ -18,14 +18,22 @@ extension KernelClient {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         // 内核的时间戳是 RFC3339；带小数秒与不带都要能解。
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let fallback = ISO8601DateFormatter()
-        fallback.formatOptions = [.withInternetDateTime]
+        //
+        // 用 `Date.ISO8601FormatStyle`（值类型、Sendable）而不是
+        // `ISO8601DateFormatter`（引用类型、非 Sendable）：后者被捕获进
+        // 这个 @Sendable 闭包会触发一个真实的并发警告，而把 formatter
+        // 提到闭包外面只是把警告藏起来 —— 共享一个可变对象才是问题本身。
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
-            if let date = formatter.date(from: text) ?? fallback.date(from: text) { return date }
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unrecognised timestamp: \(text)"))
+            if let date = try? Date(text, strategy: .iso8601.time(includingFractionalSeconds: true)) {
+                return date
+            }
+            if let date = try? Date(text, strategy: .iso8601) {
+                return date
+            }
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Unrecognised timestamp: \(text)"))
         }
         return decoder
     }

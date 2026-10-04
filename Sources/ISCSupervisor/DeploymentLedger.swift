@@ -137,6 +137,13 @@ public actor DeploymentLedger {
         return result
     }
 
+    public func abandon(_ releaseID: UUID) throws {
+        guard let record = document.records.first(where: { $0.id == releaseID }) else { throw DeploymentLedgerError.unknownRelease(releaseID) }
+        guard document.currentReleaseID != releaseID else { throw DeploymentLedgerError.persistenceFailed }
+        document.records.removeAll { $0.id == releaseID }
+        try? fileManager.removeItem(at: record.releaseDirectory)
+        try persist()
+    }
     public func activate(_ releaseID: UUID) throws -> DeploymentRecord {
         guard let record = document.records.first(where: { $0.id == releaseID }) else {
             throw DeploymentLedgerError.unknownRelease(releaseID)

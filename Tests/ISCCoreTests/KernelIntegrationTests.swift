@@ -2,107 +2,115 @@ import Foundation
 import Testing
 @testable import ISCCore
 
-/// End-to-end through the real C ABI: the vendored kernel, its HTTP handlers and its SQLite
-/// store. The unit tests pin the wire shape; this pins the behaviour that shape exists for —
-/// that a deployment's public binding cannot outlive the service it points at.
+/// 端到端跑通真实的 C ABI：vendored 内核、它的 HTTP 处理器与 SQLite。
 ///
-/// `libisc` allows one kernel per process, so this runs the whole flow in a single test and
-/// stops the kernel on every exit path.
-@Test func kernelOwnsPublishedServicesEndToEnd() async throws {
+/// 单元测试锁住的是**接口形状**，这个测试锁住的是那个形状存在的**理由** ——
+/// 一份源码目录真的能被识别、被登记、被启动起来。
+///
+/// `libisc` 每进程只允许一个内核实例，因此整条流程放在一个测试里，
+/// 并且每条退出路径都要把它停掉。
+@Test func hostingFlowEndToEnd() async throws {
     let kernel = KernelClient()
-    let dataDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("isc-phecda-\(UUID().uuidString)", isDirectory: true)
-    try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: dataDirectory) }
+    let workspace = FileManager.default.temporaryDirectory
+        .appendingPathComponent("isc-phecda-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workspace) }
 
-    _ = try await kernel.start(dataDirectory: dataDirectory.path)
+    // 版本不匹配是最严重的一类故障：每一屏都空着，而用户不知道原因。
+    // 因此在启动之前就必须能判断出来。
+    #expect(try KernelClient.interfaceVersion() == KernelClient.requiredAPIVersion)
+
+    _ = try await kernel.start(dataDirectory: workspace.path)
     do {
-        try await exercisePublicServices(kernel, workspace: dataDirectory)
+        try await exerciseHosting(kernel, workspace: workspace)
     } catch {
         _ = try? await kernel.stop()
         throw error
     }
-    _ = try await kernel.stop()
+    _ = try? await kernel.stop()
 }
 
-private func exercisePublicServices(_ kernel: KernelClient, workspace: URL) async throws {
-    // 1. A project for the deployment to belong to.
-    let project = try await kernel.call("POST", "/v1/phecda/projects", body: .object([
-        "name": .string("集成测试项目"),
-        "purpose": .string("website"),
-        "source": .object(["mode": .string("directory"), "value": .string(workspace.path)])
-    ])).body
-    let projectID = try #require(UUID(uuidString: project["id"].string), "kernel did not return a project id")
+private func exerciseHosting(_ kernel: KernelClient, workspace: URL) async throws {
+    // 1. 内核认得出这是静态站点，并给出依据。
+    try write("<h1>hi</h1>", to: workspace.appendingPathComponent("index.html"))
+    let inspection = try await kernel.inspectSource(path: workspace.path)
+    #expect(inspection.recommendedPresetId == "static-html")
+    #expect(inspection.evidence.contains { $0.file == "index.html" })
 
-    // 2. The kernel is the store of record for published services.
-    let service = PublishedService(
-        name: "集成测试服务", kind: .httpsForward, domains: ["integration.example.com"],
-        ddnsID: "ddns-integration", routeID: "route-integration", favorite: true, order: 3
-    )
-    let saved = try await kernel.call("PUT", "/v1/public-services", body: PublishedService.kernelCollection([service])).body
-    #expect(PublishedService.kernelCollection(from: saved) == [service])
+    // 2. 预设目录里既有各类技术栈，也有自定义服务器这条兜底。
+    let presets = try await kernel.presets()
+    #expect(presets.contains { $0.id == "static-html" })
+    #expect(presets.contains { $0.id == "custom" })
+    let staticPreset = try #require(presets.first { $0.id == "static-html" })
+    #expect(staticPreset.isStatic)
 
-    let listed = try await kernel.call("GET", "/v1/public-services").body
-    #expect(PublishedService.kernelCollection(from: listed) == [service])
+    // 3. 登记一个站点：只登记，不执行任何构建。
+    var request = AppCreateRequest(name: "集成测试站点", presetId: "static-html", sourcePath: workspace.path)
+    request.autoStart = true
+    let app = try await kernel.createApp(request)
+    #expect(app.state == "draft")
+    #expect(app.localPort > 1023, "内核必须分配一个非特权端口")
+    #expect(app.isStatic)
 
-    // 3. Bind a deployment to it.
-    let deploymentID = UUID()
-    let bound: JSONValue = .object([
-        "id": .string(deploymentID.uuidString),
-        "project_id": .string(projectID.uuidString),
-        "preset_id": .string("node-auto"),
-        "state": .string("running"),
-        "local_port": .number(3000),
-        "public_service_id": .string(service.id.uuidString)
-    ])
-    // Compared as UUID values, never as strings: the kernel stores and re-serialises UUIDs in
-    // lower case, while Swift's `uuidString` is upper case. Both parse to the same value, and
-    // nothing outside this file depends on the spelling.
-    let deployment = try await kernel.call("POST", "/v1/phecda/deployments", body: bound).body
-    #expect(UUID(uuidString: deployment["public_service_id"].string) == service.id)
+    // 4. 列表与详情读得到同一条记录。
+    let listed = try await kernel.apps()
+    #expect(listed.contains { $0.id == app.id })
+    #expect(try await kernel.app(app.id).name == "集成测试站点")
 
-    // 4. A state update that omits the binding must not unbind it. The Supervisor's progress
-    //    loop rewrites deployment state every few hundred milliseconds; if those writes
-    //    cleared the reference, publishing a service and then watching it deploy would
-    //    silently unbind it.
-    let stateUpdate: JSONValue = .object([
-        "id": .string(deploymentID.uuidString),
-        "project_id": .string(projectID.uuidString),
-        "preset_id": .string("node-auto"),
-        "state": .string("building")
-    ])
-    _ = try await kernel.call("POST", "/v1/phecda/deployments", body: stateUpdate).body
-    let afterState = try await kernel.call("GET", "/v1/phecda/deployments/\(deploymentID.uuidString)").body
-    #expect(afterState["state"].string == "building")
-    #expect(UUID(uuidString: afterState["public_service_id"].string) == service.id)
+    // 5. 部署：静态站点不需要任何运行时，因此这一步既不下载也不构建。
+    let accepted = try await kernel.deployApp(app.id)
+    #expect(!accepted.jobId.isEmpty)
 
-    // 5. An inconsistent collection is refused as a whole, so the kernel never has to store a
-    //    set it cannot keep self-consistent.
-    let duplicateDomains: JSONValue = .object(["items": .array([
-        service.kernelJSON,
-        PublishedService(name: "另一个", kind: .dynamicDomain, domains: ["integration.example.com"]).kernelJSON
-    ])])
-    do {
-        _ = try await kernel.call("PUT", "/v1/public-services", body: duplicateDomains)
-        Issue.record("a domain claimed twice must be rejected")
-    } catch let error as KernelError {
-        // libisc reports the transport-level code; the problem body's finer `invalid_request`
-        // travels inside the message.
-        #expect(error.code == "bad_request")
-        #expect(error.status == 400)
-        #expect(error.message.contains("claimed by more than one"))
+    // 6. 等它真的可用。任务可能在部署完成前就返回（202），因此这里轮询
+    //    的是**站点状态**而不是任务状态 —— 前者才是用户关心的东西。
+    //
+    //    条件是"running **且** healthy"，而不是只看 state：内核先把状态置为
+    //    running，再去等健康检查（它可能长达一分钟）。只看 state 会读到
+    //    一个刚起来、其实还没能提供服务的中间态。
+    let running = try await waitForApp(kernel, id: app.id, timeout: .seconds(30)) {
+        $0.state == "running" && $0.health == "healthy"
     }
-    // The rejected write left the stored collection untouched.
-    let unchanged = try await kernel.call("GET", "/v1/public-services").body
-    #expect(PublishedService.kernelCollection(from: unchanged) == [service])
+    #expect(running.state == "running")
+    #expect(try await kernel.stopApp(app.id) == ())
+    let stopped = try await kernel.app(app.id)
+    #expect(stopped.state == "stopped")
 
-    // 6. The invariant: removing the service clears the deployment's reference in the same
-    //    transaction, so the kernel cannot be left pointing at a record that is gone.
-    _ = try await kernel.call("PUT", "/v1/public-services", body: PublishedService.kernelCollection([])).body
-    let afterRemoval = try await kernel.call("GET", "/v1/phecda/deployments/\(deploymentID.uuidString)").body
-    #expect(afterRemoval["public_service_id"] == .null)
-    #expect(afterRemoval["state"].string == "building", "clearing the binding must not touch deployment state")
+    // 7. 运行时的清单能读，且不会为不存在的类型凭空造出条目。
+    let runtimes = try await kernel.runtimes()
+    #expect(runtimes.allSatisfy { !$0.kind.isEmpty })
 
-    // 7. And the deployment itself is still intact for a later re-bind.
-    let reloaded = try await kernel.call("GET", "/v1/phecda/deployments").body
-    #expect(reloaded.items.contains { UUID(uuidString: $0["id"].string) == deploymentID })
+    // 8. 只读的两个看板接口：指标可能"不支持"，但绝不能报错。
+    let metrics = try await kernel.metrics()
+    #expect(metrics.host.cpuPercent >= 0)
+    let advisories = try await kernel.advisories()
+    #expect(advisories.allSatisfy { !$0.title.isEmpty })
+
+    // 9. 删除是幂等的，并且会先停掉它。
+    try await kernel.deleteApp(app.id)
+    #expect(try await kernel.apps().contains { $0.id == app.id } == false)
+}
+
+private func write(_ text: String, to url: URL) throws {
+    try Data(text.utf8).write(to: url)
+}
+
+/// 轮询直到站点满足条件。
+///
+/// 部署是异步的（接口返回 202），因此"部署成功"只能由站点自己的状态
+/// 来证明，而不是由接口返回了什么。
+private func waitForApp(
+    _ kernel: KernelClient, id: String, timeout: Duration,
+    until satisfied: (AppRecord) -> Bool
+) async throws -> AppRecord {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    var latest = try await kernel.app(id)
+    while ContinuousClock.now < deadline {
+        latest = try await kernel.app(id)
+        if satisfied(latest) { return latest }
+        if latest.state == "failed" {
+            throw KernelError(code: "deploy_failed", message: latest.lastError ?? "the app entered the failed state")
+        }
+        try await Task.sleep(for: .milliseconds(200))
+    }
+    throw KernelError(code: "timeout", message: "the app stayed in \(latest.state)/\(latest.health) for \(timeout)")
 }

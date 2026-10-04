@@ -2,113 +2,178 @@ import Foundation
 import Testing
 @testable import ISCCore
 
+// 这些测试锁住的是**接口形状**：内核发什么字段名、缺字段时怎么表现。
+// 它们不进内核，因此可以在毫秒级跑完；真正的端到端在
+// KernelIntegrationTests 里。
+
 @Test func jsonRoundTrip() throws {
-    let value = try JSONValue.parse(#"{"name":"家庭服务","enabled":true,"values":[1,null,"x"]}"#)
-    #expect(value["name"].string == "家庭服务")
-    #expect(value["enabled"].bool)
+    let value = try JSONValue.parse(#"{"a":[1,2,{"b":null}],"c":"x"}"#)
+    #expect(value["c"].string == "x")
+    #expect(value["a"].array.count == 3)
+    #expect(value["a"].array[2]["b"] == .null)
     #expect(try JSONValue.parse(value.text()) == value)
 }
 
 @Test func errorUsesMachineCode() throws {
-    let value = try JSONValue.parse(#"{"ok":false,"code":"conflict","status":409,"error":"状态冲突"}"#)
-    do { _ = try KernelReply(value); Issue.record("Expected error") }
-    catch let error as KernelError { #expect(error.code == "conflict"); #expect(error.status == 409) }
+    let envelope = try JSONValue.parse(#"{"ok":false,"code":"not_found","status":404,"error":"nope"}"#)
+    do {
+        _ = try KernelReply(envelope)
+        Issue.record("a failed envelope must throw")
+    } catch let error as KernelError {
+        #expect(error.code == "not_found")
+        #expect(error.status == 404)
+        #expect(error.message == "nope")
+    }
 }
 
-@Test func collectionPreservesOtherItems() throws {
-    let a: JSONValue = .object(["id": .string("a")])
-    let b: JSONValue = .object(["id": .string("b")])
-    let replacement: JSONValue = .object(["id": .string("a"), "name": .string("new")])
-    let result = try CollectionEdit.replacing(id: "a", with: replacement, baseline: [a,b], current: [a,b])
-    #expect(result.items.contains(b)); #expect(result.items.contains(replacement)); #expect(result.items.count == 2)
+@Test func identifiersCannotInjectPathOrQuery() {
+    #expect(KernelClient.pathComponent("a/b?x=1") == "a%2Fb%3Fx%3D1")
+    #expect(KernelClient.pathComponent("plain-id_1") == "plain-id_1")
 }
 
-// Published services live in the kernel now, so the archive is read-only and exists solely to
-// import a file written by an earlier build.
-@Test func legacyArchiveIsReadableForOneTimeImport() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let url = directory.appendingPathComponent("services.json")
-    let service = PublishedService(name: "家庭媒体", kind: .httpsForward, domains: ["home.example.com"], ddnsID: "ddns", routeID: "route", favorite: true)
-    try JSONEncoder().encode(ServiceArchive(services: [service])).write(to: url)
-    #expect(try ServiceArchive.load(from: url).services == [service])
-    // An absent file is an empty archive, not a failure: there is simply nothing to import.
-    #expect(try ServiceArchive.load(from: directory.appendingPathComponent("absent.json")).services.isEmpty)
+// MARK: - 解码
+
+private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+    try KernelClient.makeDecoder().decode(T.self, from: Data(json.utf8))
 }
 
-@Test func identifiersCannotInjectPathOrQuery() { #expect(KernelClient.pathComponent("a/b?x=1") == "a%2Fb%3Fx%3D1") }
-
-// MARK: - Kernel wire mapping for published services
-
-private func kernelRow(_ overrides: [String: JSONValue] = [:]) -> JSONValue {
-    var fields: [String: JSONValue] = [
-        "id": .string("2B7E1B4C-0F3A-4C6E-9A2B-8D5F1C3E7A90"),
-        "name": .string("家庭媒体"),
-        "kind": .string("httpsForward"),
-        "domains": .array([.string("home.example.com")]),
-        "favorite": .bool(true),
-        "order": .number(2)
-    ]
-    for (key, value) in overrides { fields[key] = value }
-    return .object(fields)
+@Test func presetDecodingMapsSnakeCaseAndOptionals() throws {
+    let json = """
+    {"items":[
+      {"id":"node-auto","version":"1","title":"Node.js","kind":"node",
+       "min_version":"18.0.0","default_port":3000,"docker_only":false,
+       "detector_files":["package.json"],"detector_suffixes":[".js"],"note":"说明"},
+      {"id":"static-html","version":"1","title":"静态站点","kind":"","default_port":8080}
+    ]}
+    """
+    let catalog = try decode(PresetCatalog.self, json)
+    #expect(catalog.items.count == 2)
+    let node = catalog.items[0]
+    #expect(node.minVersion == "18.0.0")
+    #expect(node.detectorFiles == ["package.json"])
+    #expect(node.isStatic == false)
+    // 缺字段的条目必须能解出来，而不是整份目录失败。
+    #expect(catalog.items[1].isStatic)
+    #expect(catalog.items[1].minVersion == nil)
 }
 
-@Test func kernelDecodeMapsEveryField() throws {
-    let verified = Date(timeIntervalSince1970: 1_700_000_000)
-    let row = kernelRow([
-        "ddns_id": .string("ddns-1"), "route_id": .string("route-1"),
-        "verified_at": .string(KernelTimestamp.text(verified)),
-        "verified_fingerprint": .string("fp-1")
-    ])
-    let service = try #require(PublishedService(kernel: row))
-    #expect(service.kind == .httpsForward)
-    #expect(service.domains == ["home.example.com"])
-    #expect(service.ddnsID == "ddns-1")
-    #expect(service.routeID == "route-1")
-    #expect(service.favorite)
-    #expect(service.order == 2)
-    #expect(service.verifiedAt == verified)
-    #expect(service.verifiedFingerprint == "fp-1")
+@Test func appDecodingCarriesDomainAndRuntimeState() throws {
+    let json = """
+    {"id":"app1","name":"站点","preset_id":"static-html","kind":"",
+     "source_path":"/tmp/site","local_port":41234,"state":"running","health":"healthy",
+     "auto_start":true,"max_restarts":3,"restart_count":0,
+     "domains":[{"name":"a.example.com","route_ready":true,"cert_needs_renew":false,
+                 "cert_expires_at":"2027-01-02T03:04:05Z"}],
+     "runtime":{"kind":"","version":"","source":"none"},
+     "created_at":"2026-10-04T14:50:00.123Z","updated_at":"2026-10-04T14:51:00Z"}
+    """
+    let app = try decode(AppRecord.self, json)
+    #expect(app.state == "running")
+    #expect(app.isRunning)
+    #expect(app.isBusy == false)
+    #expect(app.domainNames == ["a.example.com"])
+    let domain = try #require(app.domains?.first)
+    #expect(domain.routeReady == true)
+    #expect(domain.certExpiresAt != nil)
+    // 两种时间戳形状（带/不带小数秒）都要能解。
+    #expect(app.createdAt != nil)
+    #expect(app.updatedAt != nil)
 }
 
-// A record this build cannot represent is skipped rather than turned into a placeholder the
-// user could then write back into the kernel.
-@Test func kernelDecodeRejectsRecordsThisBuildCannotRepresent() {
-    #expect(PublishedService(kernel: kernelRow(["kind": .string("carrier-pigeon")])) == nil)
-    #expect(PublishedService(kernel: kernelRow(["id": .string("not-a-uuid")])) == nil)
+@Test func appDecodingToleratesAbsentCollections() throws {
+    // 没有域名、也没有运行时的站点是最常见的形态（还没绑定、是静态站点）。
+    let json = """
+    {"id":"a","name":"n","preset_id":"static-html","kind":"","source_path":"/tmp",
+     "local_port":8080,"state":"draft","health":"unknown"}
+    """
+    let app = try decode(AppRecord.self, json)
+    #expect(app.domains == nil)
+    #expect(app.domainNames.isEmpty)
+    #expect(app.runtime == nil)
+    #expect(app.lastError == nil)
 }
 
-@Test func kernelEncodeOmitsAbsentOptionalsButAlwaysSendsFavoriteAndOrder() throws {
-    let original = PublishedService(name: "站点", kind: .dynamicDomain, domains: ["a.example.com", "b.example.com"], ddnsID: "ddns-9", order: 1)
-    let encoded = original.kernelJSON
-    #expect(encoded["ddns_id"].string == "ddns-9")
-    // Absent rather than null: the kernel reads a null as "clear this on purpose".
-    #expect(encoded.object["route_id"] == nil)
-    #expect(encoded.object["verified_at"] == nil)
-    #expect(encoded["favorite"] == .bool(false))
-    #expect(encoded["order"] == .number(1))
-    #expect(try #require(PublishedService(kernel: encoded)) == original)
+@Test func metricsDecodingIncludesZeroesRatherThanFailing() throws {
+    let json = """
+    {"host":{"cpu_percent":0,"memory_used_bytes":0,"memory_total_bytes":0,
+             "net_rx_bytes_per_sec":0,"net_tx_bytes_per_sec":0,"backend":"unsupported"},
+     "apps":[],"history":[]}
+    """
+    let snapshot = try decode(MetricsSnapshot.self, json)
+    #expect(snapshot.host.isSupported == false)
+    #expect(snapshot.host.memoryFraction == 0)
+    // 除以内存总量时不能崩：平台不支持时它是 0。
+    #expect(snapshot.host.memoryFraction.isFinite)
 }
 
-@Test func kernelCollectionEnvelopeRoundTripsAndSkipsUnknownRecords() {
-    let a = PublishedService(name: "a", kind: .dynamicDomain, domains: ["a.example.com"])
-    let b = PublishedService(name: "b", kind: .httpsForward, domains: ["b.example.com"])
-    let payload = PublishedService.kernelCollection([a, b])
-    #expect(payload["items"].array.count == 2)
-    #expect(PublishedService.kernelCollection(from: payload) == [a, b])
-
-    let mixed: JSONValue = .object(["items": .array([a.kernelJSON, .object(["id": .string("bad")])])])
-    #expect(PublishedService.kernelCollection(from: mixed) == [a])
-    #expect(PublishedService.kernelCollection(from: .null).isEmpty)
+@Test func appMetricsDistinguishesHostedFromOwnProcess() throws {
+    let json = #"{"app_id":"a","pid":0,"cpu_percent":0,"memory_bytes":0,"uptime_seconds":42}"#
+    let sample = try decode(AppMetrics.self, json)
+    #expect(sample.hasOwnProcess == false, "静态站点由内核托管，没有独立进程")
+    #expect(sample.uptimeSeconds == 42)
 }
 
-// The kernel writes time.RFC3339Nano, which drops the fractional part when it is zero.
-@Test func kernelTimestampAcceptsBothShapesTheKernelCanEmit() {
-    let date = Date(timeIntervalSince1970: 1_700_000_000)
-    #expect(KernelTimestamp.date(KernelTimestamp.text(date)) == date)
-    #expect(KernelTimestamp.date("2023-11-14T22:13:20Z") == date)
-    #expect(KernelTimestamp.date("2023-11-14T22:13:20.000000001Z") != nil)
-    #expect(KernelTimestamp.date("") == nil)
-    #expect(KernelTimestamp.date("not a date") == nil)
+@Test func advisoryDecodingKeepsTheActionBodyAsRawJSON() throws {
+    let json = """
+    {"items":[{"id":"runtime_missing:a:node","severity":"blocking","title":"缺少运行时",
+      "detail":"细节","action":{"label":"现在准备","method":"POST",
+      "path":"/v1/runtimes/provision","body":{"kinds":["node"]}}}]}
+    """
+    let list = try decode(AdvisoryList.self, json)
+    let advisory = try #require(list.items.first)
+    #expect(advisory.isBlocking)
+    let action = try #require(advisory.action)
+    #expect(action.method == "POST")
+    #expect(action.body?["kinds"].array.first?.string == "node")
+}
+
+@Test func jobDecodingSurfacesTheFailureReason() throws {
+    let json = """
+    {"id":"j1","kind":"app.deploy","status":"failed",
+     "error":{"code":"deploy_failed","detail":"npm install failed"},
+     "created_at":"2026-10-04T14:50:00Z","finished_at":"2026-10-04T14:50:05Z"}
+    """
+    let job = try decode(JobInfo.self, json)
+    #expect(job.isFinished)
+    #expect(job.failedMessage == "npm install failed")
+}
+
+// MARK: - 编码
+
+/// 把一个 Encodable 编成 JSON 对象再断言键值。
+///
+/// 不靠字符串包含来断言：JSONEncoder 在 Apple 平台上默认把 `/` 转义成
+/// `\/`（合法 JSON，解码后仍是 `/`），逐字比较会得出错误结论。
+private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
+    let data = try KernelClient.makeEncoder().encode(value)
+    return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+@Test func createRequestOmitsAbsentOptionals() throws {
+    var request = AppCreateRequest(name: "站点", presetId: "static-html", sourcePath: "/tmp/site")
+    request.domains = ["a.example.com"]
+    let object = try encodedObject(request)
+
+    #expect(object["preset_id"] as? String == "static-html")
+    #expect(object["source_path"] as? String == "/tmp/site")
+    #expect(object["domains"] as? [String] == ["a.example.com"])
+    // 没设过的字段不该出现在请求里：契约把它们当"不改动"。
+    #expect(object["port"] == nil)
+    #expect(object["custom_executable"] == nil)
+    #expect(object["max_restarts"] == nil)
+}
+
+@Test func settingsPatchOnlyCarriesWhatWasSet() throws {
+    var patch = KernelSettings()
+    patch.lang = "zh-CN"
+    patch.proxyEnabled = true
+    let object = try encodedObject(patch)
+    #expect(object["lang"] as? String == "zh-CN")
+    #expect(object["proxy_enabled"] as? Bool == true)
+    #expect(object["acme_email"] == nil, "没设过的字段必须留空，否则会被当成清空")
+    #expect(object["proxy_port"] == nil)
+}
+
+@Test func versionGuardNamesTheVersionItNeeds() {
+    #expect(KernelClient.requiredAPIVersion == "v2")
 }

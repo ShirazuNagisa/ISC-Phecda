@@ -224,20 +224,24 @@ struct HomeView: View {
 
     @ViewBuilder private var metricsSection: some View {
         if let host = model.metrics?.host, host.isSupported {
-            HStack(spacing: 14) {
+            // alignment: .top 让三张卡从同一条基线开始排；等高由 MetricCard
+            // 内部固定的第三行高度保证。
+            HStack(alignment: .top, spacing: 14) {
                 MetricCard(title: tr("CPU", "CPU"),
                            value: host.cpuPercent.formattedPercent,
+                           detail: .fraction(host.cpuPercent / 100),
                            caption: tr("整机占用", "whole machine"),
-                           symbol: "cpu", tint: .blue,
-                           fraction: host.cpuPercent / 100)
+                           symbol: "cpu", tint: .blue)
                 MetricCard(title: tr("内存", "Memory"),
                            value: host.memoryUsedBytes.formattedBytes,
+                           detail: .fraction(host.memoryFraction),
                            caption: tr("共 \(host.memoryTotalBytes.formattedBytes)", "of \(host.memoryTotalBytes.formattedBytes)"),
-                           symbol: "memorychip", tint: .purple,
-                           fraction: host.memoryFraction)
+                           symbol: "memorychip", tint: .purple)
                 MetricCard(title: tr("网络", "Network"),
                            value: host.netRxBytesPerSec.formattedRate,
-                           caption: tr("发送 \(host.netTxBytesPerSec.formattedRate)", "up \(host.netTxBytesPerSec.formattedRate)"),
+                           detail: .text(tr("↑ \(host.netTxBytesPerSec.formattedRate)",
+                                            "↑ \(host.netTxBytesPerSec.formattedRate)")),
+                           caption: tr("接收 / 发送", "down / up"),
                            symbol: "arrow.up.arrow.down", tint: .teal)
             }
         } else {

@@ -85,14 +85,34 @@ struct StatePill: View {
 }
 
 /// 首页上的一张指标卡。
+///
+/// 三张卡必须**一样高**。此前网络那张少一行（CPU 与内存有占比条、网络没有），
+/// 于是它比另外两张矮一截 —— 并排的三张卡参差不齐，看起来像是网络那张
+/// 出了问题。修法不是给它硬塞一个没有意义的占比条，而是让第三行**两种形态
+/// 高度一致**：有占比就画条，没有就放一行说明。
 struct MetricCard: View {
+    /// 第三行显示什么。
+    enum Detail {
+        /// 0...1 的占比。
+        case fraction(Double)
+        /// 一行说明（用在没有占比可言的指标上，例如网络速率）。
+        case text(String)
+    }
+
     let title: String
     let value: String
+    /// 第三行。
+    let detail: Detail
+    /// 第四行：补充说明。
     let caption: String?
     let symbol: String
     let tint: Color
-    /// 0...1 的占比；为 nil 时不画进度条。
-    var fraction: Double?
+
+    /// 第三行的固定高度。
+    ///
+    /// 写死是刻意的：`ProgressView` 与一行文字的自然高度不同，靠它们各自
+    /// 撑出来的高度就不可能一致，而"一致"正是这里要的东西。
+    private let detailHeight: CGFloat = 16
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -100,10 +120,18 @@ struct MetricCard: View {
                 Image(systemName: symbol).foregroundStyle(tint)
                 Text(title).font(.caption).foregroundStyle(.secondary)
             }
-            Text(value).font(.title2.weight(.semibold)).monospacedDigit()
-            if let fraction {
-                ProgressView(value: min(max(fraction, 0), 1)).tint(tint)
+            Text(value).font(.title2.weight(.semibold)).monospacedDigit().lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Group {
+                switch detail {
+                case .fraction(let fraction):
+                    ProgressView(value: min(max(fraction, 0), 1)).tint(tint)
+                case .text(let text):
+                    Text(text).font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
             }
+            .frame(height: detailHeight)
             if let caption {
                 Text(caption).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }

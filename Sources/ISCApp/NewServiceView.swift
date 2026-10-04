@@ -277,11 +277,15 @@ struct FirstRunView: View {
                     // 直接开表单，而不是"跳到 DNS 页再让用户自己找按钮"。
                     model.section = .dns
                     model.requestedSheet = .credentials
+                    model.dismissOnboarding()
                     dismiss()
                 }
                 .buttonStyle(.glassProminent)
                 Spacer()
-                Button(tr("稍后再说", "Later")) { dismiss() }
+                Button(tr("稍后再说", "Later")) {
+                    model.dismissOnboarding()
+                    dismiss()
+                }
             }
         }
         .padding(24)

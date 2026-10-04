@@ -78,6 +78,11 @@ enum AppSection: String, CaseIterable, Identifiable {
     var section: AppSection = .home
     var selectedAppID: String?
     var showingNewService = false
+    /// 首次引导只在**第一次**出现。
+    ///
+    /// 用户点过"稍后再说"之后不该每次启动都被再问一遍 —— 那是最容易被
+    /// 当成"这个应用有毛病"的一类打扰。
+    private static let onboardingKey = "ISC.Phecda.onboardingDismissed"
     /// 建议动作要求界面跳到某处时记在这里，由 RootView 负责呈现。
     ///
     /// 用"请求"而不是直接打开：模型不该持有视图，而视图也不该去猜
@@ -153,7 +158,7 @@ enum AppSection: String, CaseIterable, Identifiable {
             await refreshAll()
             beginEvents()
             beginMetricsPolling()
-            showOnboarding = apps.isEmpty && credentials.isEmpty
+            updateOnboarding()
         } catch {
             phase = .failed
             errorMessage = error.localizedDescription
@@ -219,10 +224,29 @@ enum AppSection: String, CaseIterable, Identifiable {
         if let value = results.5 { credentials = value }
         if let value = results.6 {
             settings = value
-            showOnboarding = apps.isEmpty && credentials.isEmpty
+            updateOnboarding()
         }
         if let value = results.7 { advisories = value }
         if let value = results.8 { jobs = value }
+    }
+
+    /// 重新判断要不要显示首次引导。
+    ///
+    /// 三个条件缺一不可：还没有站点、还没有凭据、而且用户没关过它。
+    /// 最后一条是补出来的：没有它，点过"稍后再说"的用户每次启动都会被
+    /// 再问一遍 —— 那是最容易被当成"这个应用有毛病"的一类打扰。
+    func updateOnboarding() {
+        guard !UserDefaults.standard.bool(forKey: Self.onboardingKey) else {
+            showOnboarding = false
+            return
+        }
+        showOnboarding = apps.isEmpty && credentials.isEmpty
+    }
+
+    /// 用户关掉了首次引导：记住这件事。
+    func dismissOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+        showOnboarding = false
     }
 
     /// 目录类数据（预设、服务商）在内核运行期是固定的，取一次即可。

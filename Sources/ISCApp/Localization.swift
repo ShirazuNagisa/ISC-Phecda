@@ -16,8 +16,12 @@ var kernelLanguage: String {
 
 extension Int {
     /// 把字节数写成人看的大小。
+    ///
+    /// 零要单独处理：`ByteCountFormatter` 对 0 返回的是 **"Zero KB"**，
+    /// 而界面上写"共 Zero KB"既不像数字也不像人话。
     var formattedBytes: String {
-        ByteCountFormatter.string(fromByteCount: Int64(self), countStyle: .memory)
+        guard self != 0 else { return "0 B" }
+        return ByteCountFormatter.string(fromByteCount: Int64(self), countStyle: .memory)
     }
 
     /// 把每秒字节数写成速率。

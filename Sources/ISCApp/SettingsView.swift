@@ -95,7 +95,14 @@ struct SettingsView: View {
 
             labeled(tr("DNS 凭据", "DNS credential")) {
                 Picker("", selection: $acmeCredentialID) {
-                    Text(tr("未选择", "Not selected")).tag(String?.none)
+                    // 默认就是**自动**。
+                    //
+                    // 这个问题的答案完全由数据决定（域名在哪个区域、
+                    // 那个区域在哪把凭据下），让用户在一列"标签 · 服务商"
+                    // 里挑一个，是在要求他心算一件内核明明知道的事 ——
+                    // 而他没有任何办法验证自己挑对了。挑错的症状还离得
+                    // 很远：这里一切正常，几天后证书续期时才失败。
+                    Text(tr("自动（按域名匹配）", "Automatic (match by domain)")).tag(String?.none)
                     ForEach(dnsCapableCredentials) { credential in
                         Text("\(credential.label) · \(credential.provider)")
                             .tag(String?.some(credential.id))
@@ -103,10 +110,18 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
             }
+            Text(acmeCredentialID == nil
+                 ? tr("内核会按域名找出它属于哪个区域、那把凭据在哪。只有当自动匹配挑错时才需要手动指定。",
+                      "The kernel finds which zone the domain belongs to and which credential owns it. Pick one manually only if automatic matching gets it wrong.")
+                 : tr("已手动指定：所有域名的 DNS-01 校验都会用这一把凭据。",
+                      "Manually pinned: DNS-01 for every domain will use this one credential."))
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if dnsCapableCredentials.isEmpty {
-                Text(tr("还没有支持 DNS-01 的凭据，先去 DNS 页添加一个。",
-                        "No credential supports DNS-01 yet. Add one in the DNS section."))
+                Text(tr("还没有能新建记录的凭据（DNS-01 需要写一条 TXT）。先去 DNS 页添加一个，例如 Cloudflare。",
+                        "No credential can create records yet (DNS-01 writes a TXT record). Add one in the DNS section, e.g. Cloudflare."))
                     .font(.caption2).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Toggle(tr("使用测试环境（签发的证书不被浏览器信任）",
@@ -194,7 +209,14 @@ struct SettingsView: View {
         guard !loaded, let settings = model.settings else { return }
         acmeEmail = settings.acmeEmail ?? ""
         useStaging = (settings.acmeDirectory ?? "").contains("staging")
-        acmeCredentialID = settings.acmeDnsCredentialId
+        // **空串要当成 nil。**
+        //
+        // 内核返回的是 `""`（Go 那边的字段是 `string`，不是 `*string`），
+        // 而 Swift 把它解成 `Optional("")` —— 与 `nil` 是两回事。
+        // picker 里"自动"那一项的 tag 是 `String?.none`，于是两者对不上：
+        // 界面显示**空白**，看起来像"还没选"，而实际上它已经是自动了。
+        acmeCredentialID = (settings.acmeDnsCredentialId ?? "").isEmpty
+            ? nil : settings.acmeDnsCredentialId
         proxyEnabled = settings.proxyEnabled ?? false
         proxyPort = (settings.proxyPort ?? 0) > 0 ? String(settings.proxyPort!) : ""
         proxyTLS = settings.proxyTls ?? true

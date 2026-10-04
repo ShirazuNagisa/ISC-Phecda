@@ -340,6 +340,27 @@ extension KernelClient {
         try await audit(actionPrefix: "remote.", limit: limit)
     }
 
+    /// 列出可以承载公网子域名的域名。
+    ///
+    /// 供界面把"挂在哪个域名下"做成一个**列表**而不是输入框：
+    /// 用户不需要记住自己的区域名，更不该把它打错。
+    public func remotePublicDomains() async throws -> [RemotePublicDomain] {
+        try await send("GET", "/v1/remote/public/domains", as: [RemotePublicDomain].self)
+    }
+
+    /// 立即同步公网子域名的 DNS 记录。
+    ///
+    /// 幂等：地址没变就不发写请求。
+    public func syncRemotePublic() async throws -> RemoteStatus {
+        try await send("POST", "/v1/remote/public/sync",
+                       body: Optional<Never>.none, as: RemoteStatus.self)
+    }
+
+    /// 删除公网子域名与它的 DNS 记录。
+    public func deleteRemotePublic() async throws {
+        try await sendIgnoringReply("DELETE", "/v1/remote/public")
+    }
+
     /// 保存 APNs 凭据。
     ///
     /// 私钥**只写不读**：保存之后就再也取不回来，界面上只会显示

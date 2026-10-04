@@ -22,10 +22,10 @@ struct RemoteView: View {
     /// 待吊销的设备（点"吊销"之后先确认一次）。
     @State private var pendingRevoke: RemoteDevice?
     @State private var roleSelection = "viewer"
-    @State private var portText = ""
     @State private var showingPairing = false
     @State private var showingApns = false
     @State private var pushTestResult: ServiceActionResult?
+    @State private var publicDomains: [RemotePublicDomain] = []
     @State private var busy = false
 
     private var status: RemoteStatus? { model.remoteStatus }
@@ -36,6 +36,13 @@ struct RemoteView: View {
                 intro
                 statusCard
                 if status?.enabled == true {
+                    // 公网访问紧挨着开关，而不是埋在配对卡片下面。
+                    //
+                    // 两者讲的是同一件事的两面：开关决定"要不要开一个口子"，
+                    // 公网访问决定"这个口子露在哪里"。而配对卡片很长
+                    // （它带着二维码），放在它下面会让这一整块落在
+                    // 折叠线以下 —— 用户根本不知道它存在。
+                    publicCard
                     pairingCard
                     devicesCard
                     pushCard
@@ -114,50 +121,27 @@ struct RemoteView: View {
                 if busy { ProgressView().controlSize(.small) }
             }
 
-            HStack(spacing: 10) {
-                Text(tr("监听端口", "Listen port")).font(.callout)
-                TextField("8788", text: $portText)
-                    .frame(width: 90)
-                    .textFieldStyle(.roundedBorder)
-                    .monospacedDigit()
-                    .onSubmit { applyPort() }
-                Button(tr("应用", "Apply")) { applyPort() }
-                    .disabled(busy || portText.isEmpty || portText == String(status?.port ?? 0))
-                Spacer()
-            }
-
-            Divider()
+            // 端口输入框已去掉。
+            //
+            // 端口是**固定的 8788**，而改它需要同时改防火墙与已配对设备
+            // 里的记录 —— 一个能被误触的输入框在这里只会制造支持问题。
+            // 需要改的话走 `isc settings set --remote-port`。
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                 row(tr("状态", "State"), stateText)
                 if status?.enabled == true {
-                    row(tr("公钥指纹", "Key fingerprint"), status?.fingerprintShort ?? "—")
-                    row(tr("证书有效期至", "Certificate valid until"), formatted(status?.tlsNotAfter))
+                    // 公钥指纹与证书有效期不再显示。
+                    //
+                    // 指纹当初是给"手输六位码"那条路人工核对用的，
+                    // 而六位码已删除 —— 二维码与配对链接自带指纹，
+                    // 核对是内建的。
                     row(tr("已配对设备", "Paired devices"), String(status?.deviceCount ?? 0))
                 }
             }
 
-            if let addresses = status?.addresses, !addresses.isEmpty, status?.enabled == true {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(tr("手机可以尝试的地址", "Addresses your phone can try"))
-                        .font(.caption).foregroundStyle(.secondary)
-                    ForEach(addresses, id: \.self) { address in
-                        HStack(spacing: 6) {
-                            Text("https://\(address)")
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-                            Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString("https://\(address)", forType: .string)
-                            } label: {
-                                Image(systemName: "doc.on.doc")
-                            }
-                            .buttonStyle(.borderless)
-                            .help(tr("复制", "Copy"))
-                        }
-                    }
-                }
-            }
+            // 候选地址列表已去掉：二维码与配对链接里都带着它们，
+            // 而"手机可以尝试的地址"原本是给手输那条路抄的。
+            // 需要排查时用 `isc remote status`。
 
             if status?.hasError == true {
                 Label(status?.lastError ?? "", systemImage: "exclamationmark.triangle.fill")
@@ -177,8 +161,9 @@ struct RemoteView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
-        .onAppear { portText = String(status?.port ?? 8788) }
-        .onChange(of: status?.port) { _, new in portText = String(new ?? 8788) }
+        // 域名列表只在进入这一页时拉一次：它可能打服务商的 API，
+        // 而用户不会在这一页上停留到需要它过期。
+        .task { await refreshPublicDomains() }
     }
 
     private var disabledHint: some View {
@@ -226,6 +211,115 @@ struct RemoteView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
+    }
+
+    // MARK: - 公网访问
+
+    private var publicCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(tr("公网访问", "Public access")).font(.headline)
+                Spacer()
+                if let publicStatus = status?.public, publicStatus.enabled {
+                    Label(publicStatus.host ?? tr("正在建立", "Setting up"),
+                          systemImage: "globe")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            // 这一段的措辞是**刻意**的：公网访问与局域网监听不是同一件事，
+            // 代价也不同。用户在这里做的决定会把内核暴露在互联网上。
+            Text(tr("在**你自己的**域名下建一条随机子域名，指向这台机器的公网 IPv6，并给它签一张受信任的证书。这样手机在任何网络上都能连上。",
+                    "Creates a random subdomain under **your own** domain, pointing at this machine's public IPv6 with a trusted certificate, so the phone can connect from any network."))
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Toggle(tr("开启公网访问", "Enable public access"), isOn: publicEnabledBinding)
+                .toggleStyle(.switch)
+                .disabled(busy)
+
+            if status?.public?.enabled == true {
+                publicDetails
+            } else {
+                Text(tr("默认关闭。开启之后全世界都能扫到这个监听 —— 域名还会出现在证书透明日志里，那不是秘密。安全完全靠设备令牌与限流。",
+                        "Off by default. Once on, the internet can find this listener — and the domain appears in Certificate Transparency logs, so it is not a secret. Security rests entirely on device tokens and rate limiting."))
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+    }
+
+    private var publicDetails: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // 域名选择器。
+            //
+            // 让用户只回答一个他能回答的问题：**挂在哪个域名下**。
+            // 哪把凭据、哪个区域由这个域名唯一决定 —— 让他填两个内部
+            // ID 是在要求他心算一件内核明明知道的事，而他没有任何
+            // 办法验证自己填对了。
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                GridRow {
+                    Text(tr("挂在域名下", "Under domain")).foregroundStyle(.secondary)
+                    if publicDomains.isEmpty {
+                        Text(tr("还没有能建记录的域名，先去 DNS 页添加一个凭据",
+                                "No domain can host records yet — add a credential in the DNS section"))
+                            .font(.caption).foregroundStyle(.orange)
+                    } else {
+                        Picker("", selection: publicDomainBinding) {
+                            Text(tr("未选择", "Not selected")).tag("")
+                            ForEach(publicDomains) { item in
+                                Text("\(item.domain) · \(item.provider)").tag(item.domain)
+                            }
+                        }
+                        .labelsHidden()
+                        .disabled(busy)
+                    }
+                }
+                if let host = status?.public?.host {
+                    row(tr("子域名", "Subdomain"), host)
+                }
+                if let ipv6 = status?.public?.ipv6 {
+                    row(tr("AAAA", "AAAA"), ipv6)
+                }
+                if let ipv4 = status?.public?.ipv4 {
+                    row(tr("A", "A"), ipv4)
+                }
+            }
+
+            if let check = status?.public?.lastCheck {
+                Label(check.detail ?? "",
+                      systemImage: check.isReachable ? "checkmark.seal.fill"
+                                 : (check.isUnknown ? "questionmark.circle" : "exclamationmark.triangle"))
+                    .font(.caption)
+                    .foregroundStyle(check.isReachable ? Color.green
+                                     : (check.isUnknown ? Color.secondary : Color.orange))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if status?.public?.host != nil {
+                Text(tr("可达性还没测过。最准的测法是：**手机关掉 Wi-Fi 用蜂窝数据**，打开子域名看一眼能不能连上。",
+                        "Reachability has not been tested. The most accurate test: turn off Wi-Fi on your phone, use cellular data, and open the subdomain."))
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // IPv6 是这条路唯一的地基，而它不总是通的。
+            Text(tr("需要一条能从外网路由进来的公网 IPv6，以及路由器放行这个端口。手机也必须在有 IPv6 的网络上（蜂窝数据通常有）。",
+                    "Needs a globally routable IPv6 address and a router that lets the port through. The phone must also be on a network with IPv6 (cellular usually is)."))
+                .font(.caption2).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                Button(tr("立即同步", "Sync now")) { syncPublic() }
+                    .disabled(busy || (status?.public?.domain ?? "").isEmpty)
+                Button(tr("删除子域名与记录", "Delete subdomain and records"), role: .destructive) {
+                    deletePublic()
+                }
+                .disabled(busy)
+            }
+        }
     }
 
     // MARK: - 设备
@@ -465,11 +559,6 @@ struct RemoteView: View {
         }
     }
 
-    private func formatted(_ date: Date?) -> String {
-        guard let date else { return "—" }
-        return date.formatted(date: .abbreviated, time: .omitted)
-    }
-
     private func row(_ label: String, _ value: String) -> some View {
         GridRow {
             Text(label).font(.callout).foregroundStyle(.secondary)
@@ -487,21 +576,14 @@ struct RemoteView: View {
             // 用户已经改过的端口，而那期间手机可能正好在扫码。
             var patch = RemoteSettingsPatch()
             patch.enabled = enabled
-            if let port = Int(portText), port > 0, port != status?.port { patch.port = port }
+            // 端口不进 patch：界面不再提供改它的入口。它是固定 8788 ——
+            // 改它要同时改防火墙与已配对设备里的记录，需要时走
+            // `isc settings set --remote-port`。
             do { model.remoteStatus = try await model.kernel.updateRemoteSettings(patch) }
             catch { model.errorMessage = error.localizedDescription }
             busy = false
             await model.refreshAll()
         }
-    }
-
-    private func applyPort() {
-        guard let port = Int(portText), port > 0, port <= 65535 else {
-            model.errorMessage = tr("端口必须在 1-65535 之间。", "The port must be between 1 and 65535.")
-            portText = String(status?.port ?? 8788)
-            return
-        }
-        setEnabled(status?.enabled ?? false)
     }
 
     private func startPairing() {
@@ -519,6 +601,86 @@ struct RemoteView: View {
     private func revoke(_ device: RemoteDevice) {
         pendingRevoke = nil
         model.execute { try await self.model.kernel.revokeRemoteDevice(device.id) }
+    }
+
+    /// 公网访问开关。
+    ///
+    /// 用 Binding 包装而不是直接绑 status：`status` 是只读的远端快照，
+    /// 而开关要先提交再刷新。
+    private var publicEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { status?.public?.enabled ?? false },
+            set: { setPublicEnabled($0) }
+        )
+    }
+
+    private var publicDomainBinding: Binding<String> {
+        Binding(
+            get: { status?.public?.domain ?? "" },
+            set: { setPublicDomain($0) }
+        )
+    }
+
+    private func setPublicEnabled(_ enabled: Bool) {
+        if enabled && (status?.public?.domain ?? "").isEmpty, let first = publicDomains.first {
+            // 开启时若还没选域名，用列表里的第一个 —— 只有一个域名时
+            // 这就是唯一的选择，而让用户"先选域名再开开关"是多一步。
+            setPublicDomain(first.domain, enabled: true)
+            return
+        }
+        patchPublic(enabled: enabled, domain: nil)
+    }
+
+    private func setPublicDomain(_ domain: String, enabled: Bool? = nil) {
+        patchPublic(enabled: enabled ?? (status?.public?.enabled ?? false), domain: domain)
+    }
+
+    private func patchPublic(enabled: Bool, domain: String?) {
+        busy = true
+        Task {
+            var patch = KernelSettings()
+            patch.remotePublicEnabled = enabled
+            if let domain { patch.remotePublicDomain = domain }
+            do {
+                _ = try await model.kernel.updateSettings(patch)
+                await model.refreshAll()
+                if enabled { await refreshPublicDomains() }
+            } catch {
+                model.errorMessage = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+
+    private func syncPublic() {
+        busy = true
+        Task {
+            do {
+                model.remoteStatus = try await model.kernel.syncRemotePublic()
+            } catch {
+                model.errorMessage = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+
+    private func deletePublic() {
+        busy = true
+        Task {
+            do {
+                try await model.kernel.deleteRemotePublic()
+                await model.refreshAll()
+            } catch {
+                // 删除失败**不是**"什么都没做"：台账已清空，但区域里
+                // 可能留下一条记录。让用户能据此去 DNS 后台确认。
+                model.errorMessage = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+
+    private func refreshPublicDomains() async {
+        publicDomains = (try? await model.kernel.remotePublicDomains()) ?? []
     }
 
     private func testPush(_ device: RemoteDevice) {
@@ -553,6 +715,8 @@ private struct PairingSheet: View {
     let session: RemotePairingSession
     let onClose: () -> Void
 
+    @State private var copied = false
+
     var body: some View {
         VStack(spacing: 16) {
             Text(tr("用 ISC Mizar 扫码", "Scan with ISC Mizar"))
@@ -573,25 +737,51 @@ private struct PairingSheet: View {
                     .frame(width: 280)
             }
 
-            VStack(spacing: 4) {
-                Text(tr("或者在手机上手动输入", "Or type this on your phone"))
-                    .font(.caption).foregroundStyle(.secondary)
-                // 六位码是这一页上最需要被看清的东西：它要被人一个字符
-                // 一个字符地念出来、敲进另一台设备。
-                Text(session.manualCode)
-                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
-                    .textSelection(.enabled)
+            // 复制配对链接。
+            //
+            // 它是给"新设备没法扫码"准备的：点一下、发给自己、在新设备上
+            // 粘一次即可 —— 那条链接里装着地址、指纹与密钥三样东西，
+            // 用户全程不用碰地址。
+            if let link = session.qrLink, !link.isEmpty {
+                VStack(spacing: 6) {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(link, forType: .string)
+                        copied = true
+                    } label: {
+                        Label(copied
+                              ? tr("已复制", "Copied")
+                              : tr("复制配对链接", "Copy pairing link"),
+                              systemImage: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(.glass)
+
+                    // 必须说清楚它的安全属性。
+                    //
+                    // 链接里带着密钥 —— 在它有效的五分钟里，谁拿到它
+                    // 谁就能配对。写一句"别发到聊天软件里"比事后解释
+                    // "为什么多了一台不认识的设备"便宜得多。
+                    Text(tr("链接里带着配对密钥。五分钟内有效、用一次即失效 —— 别发到聊天软件或群里。",
+                            "The link carries the pairing secret. Valid for five minutes, single use — do not post it in a chat."))
+                        .font(.caption2).foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(width: 320)
             }
 
-            VStack(spacing: 2) {
-                Text(tr("公钥指纹 \(session.fingerprintShort)", "Key fingerprint \(session.fingerprintShort)"))
-                    .font(.system(.caption, design: .monospaced))
-                    .textSelection(.enabled)
-                Text(session.role == "operator"
-                     ? tr("这台设备将获得「可改 DNS」权限", "This device will get DNS editing rights")
-                     : tr("这台设备将获得「只读监控」权限", "This device will get read-only access"))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            // 六位码与公钥指纹都不再显示。
+            //
+            // 六位码已删除：它只有约 10 亿种可能、靠按来源锁定兜底，
+            // 而二维码与配对链接里的密钥是 256 位。
+            //
+            // 指纹也不再显示，因为**它不再需要人工核对** ——
+            // 指纹当初要"两端比一比"，正是因为六位码不携带任何身份
+            // 信息。二维码与链接里装着指纹，核对是内建的。
+            Text(session.role == "operator"
+                 ? tr("这台设备将获得「可改 DNS」权限", "This device will get DNS editing rights")
+                 : tr("这台设备将获得「只读监控」权限", "This device will get read-only access"))
+                .font(.caption).foregroundStyle(.secondary)
 
             // 倒计时用 TimelineView 而不是自己起一个 Task：它由系统按
             // 需要刷新，窗口不可见时不会继续跑。

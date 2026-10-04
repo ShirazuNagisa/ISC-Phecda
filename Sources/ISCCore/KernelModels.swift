@@ -494,6 +494,14 @@ public struct KernelSettings: Codable, Sendable {
     public var acmeDirectory: String?
     public var acmeDnsCredentialId: String?
 
+    /// 公网访问：在**用户自己的**域名下建一条随机子域名。
+    public var remotePublicEnabled: Bool?
+    /// 子域名挂在哪个域名下。
+    ///
+    /// 用户只回答这一个问题：哪把凭据、哪个区域由这个域名唯一决定，
+    /// 内核自己反查得出来。
+    public var remotePublicDomain: String?
+
     public init() {}
 }
 
@@ -567,8 +575,51 @@ public struct RemoteStatus: Decodable, Sendable {
     /// 最近一次监听失败的原因；空串表示正常。
     public let lastError: String?
 
+    public let `public`: RemotePublicStatus?
+
     public var isRunning: Bool { state == "running" }
     public var hasError: Bool { !(lastError ?? "").isEmpty }
+}
+
+/// 公网访问的状态。
+///
+/// 与局域网监听分开描述，因为两者的**代价**不同：局域网监听只在
+/// 局域网内可见，而公网访问会把内核暴露在互联网上。
+public struct RemotePublicStatus: Decodable, Sendable {
+    public let enabled: Bool
+    /// 凭据与区域都配好了、可以开始同步。
+    ///
+    /// 与 `enabled` 分开：勾了开关但没选域名时，用户需要知道差的是
+    /// 哪一步，而不是看到一个"已开启"却什么都没发生。
+    public let ready: Bool
+    /// 子域名挂在哪个域名下（用户选的）。
+    public let domain: String?
+    /// 完整的子域名。
+    public let host: String?
+    /// "记录类型 → 地址值"。只含内核自己写的那几条。
+    public let records: [String: String]?
+    public let lastCheck: Check?
+
+    public struct Check: Decodable, Sendable {
+        public let at: Date
+        public let verdict: String
+        public let family: String?
+        public let detail: String?
+
+        public var isReachable: Bool { verdict == "reachable" }
+        public var isUnknown: Bool { verdict == "unknown" }
+    }
+
+    public var ipv6: String? { records?["AAAA"] }
+    public var ipv4: String? { records?["A"] }
+}
+
+/// 一个可以承载公网子域名的域名。
+public struct RemotePublicDomain: Decodable, Sendable, Identifiable {
+    public let domain: String
+    public let provider: String
+
+    public var id: String { domain }
 }
 
 /// APNs 凭据的状态（只有非敏感字段）。
@@ -610,14 +661,24 @@ public struct RemotePairingSession: Decodable, Sendable, Identifiable {
     public let id: String
     public let role: String
     public let label: String?
-    /// 六位手输配对码（字母表去掉了 I/L/O/U 与 0/1）。
-    public let manualCode: String
+    /// 证书公钥指纹的短形式。
+    ///
+    /// 界面不再显示它 —— 指纹当初要"两端人工比一比"，正是因为六位码
+    /// 不携带任何身份信息。二维码与配对链接里装着指纹，核对是内建的。
+    /// 留着这个字段是因为它仍在契约里（CLI 会打印它）。
     public let fingerprintShort: String
     public let spkiSha256: String
+    /// 候选地址（含端口）。界面不再逐条列出 —— 二维码与链接里都有。
     public let addresses: [String]
     public let expiresAt: Date
     /// 二维码里要编码的原文。**由内核生成**，界面只负责渲染成像素。
     public let qrPayload: String
+    /// 载荷的**可复制**形式（`isc-remote://pair?d=…`）。
+    ///
+    /// 给"新设备没法扫码"准备的：点复制、发给自己、在新设备上粘一次。
+    /// 它由**内核**生成 —— 链接格式是契约，让 GUI 自己拼一遍意味着
+    /// 两个实现，而它们会漂移，症状是"某个版本的 App 粘不进去"。
+    public let qrLink: String?
 }
 
 /// 一台已配对的远程设备。

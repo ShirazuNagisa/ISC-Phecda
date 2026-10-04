@@ -140,7 +140,11 @@ struct BannerRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: symbol).foregroundStyle(tint)
+            // lineLimit 管住高度，frame(maxWidth:) 管住**理想宽度**：
+            // 一条没有空格可断的长错误会把自己的理想宽度一路传给整个窗口，
+            // 侧栏就是被这么挤掉的（见 EmptyHint.messageMaxWidth）。
             Text(text).font(.callout).textSelection(.enabled).lineLimit(3)
+                .frame(maxWidth: EmptyHint.messageMaxWidth, alignment: .leading)
             Spacer(minLength: 8)
             Button(action: dismiss) { Image(systemName: "xmark") }.buttonStyle(.borderless)
         }

@@ -66,7 +66,7 @@ struct DNSView: View {
                 }
             }
         }
-        .task { await bootstrap() }
+        .task(id: model.credentials.count) { await bootstrap() }
     }
 
     private var pickers: some View {

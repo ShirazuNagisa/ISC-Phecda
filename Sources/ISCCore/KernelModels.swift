@@ -423,7 +423,25 @@ public struct Provider: Decodable, Sendable, Identifiable {
     public let tier: Int?
     public let capabilities: ProviderCapabilities
     public let credentialFields: [ProviderField]
+    /// 该服务商创建 API 凭据的控制台页面；内核没登记时为空。
+    ///
+    /// 可选而不是必填：契约里它不是 required，而且确实存在没有稳定
+    /// 凭据页面的服务商。界面据此决定给不给"去配置"按钮 ——
+    /// 不要为了让它非空而编一个地址出来。
+    public let consoleUrl: String?
     public var id: String { name }
+
+    /// 可直接用系统浏览器打开的凭据页面；没有或不是 https 时为 nil。
+    ///
+    /// 这里挡一道 https：这个值来自内核（也就是一份外部数据），
+    /// 而它会被直接交给系统浏览器打开。http 的凭据页面本就不该存在，
+    /// 真出现了也不该由我们替用户打开。
+    public var credentialPageURL: URL? {
+        guard let consoleUrl, let url = URL(string: consoleUrl),
+              url.scheme?.lowercased() == "https", url.host() != nil
+        else { return nil }
+        return url
+    }
 }
 
 public struct ProviderList: Decodable, Sendable {

@@ -181,12 +181,28 @@ struct EmptyHint: View {
     let message: String
     var action: (label: String, run: () -> Void)?
 
+    /// 正文的最大宽度。
+    ///
+    /// 这个上限不是为了好看，是为了**别把左侧栏挤没**：正文里常常是服务商
+    /// 或内核抛回来的错误（一条长得没有空格可断的 URL），而 Text 的理想宽度
+    /// 就是它一行排开的宽度。理想宽度会一路往上传，NavigationSplitView 只好
+    /// 从侧栏抽宽度去满足它 —— 结果就是 DNS 服务商一出错，整个左侧栏变空。
+    /// 给正文钉一个上限，这条传导链就断了。
+    static let messageMaxWidth: CGFloat = 460
+
+    /// 行数上限。宽度上限挡不住"在零宽提案下算出几百行高"这种情况，
+    /// 行数上限可以 —— 两个方向都钉住，正文才彻底不参与布局博弈。
+    static let messageMaxLines = 8
+
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: symbol).font(.system(size: 30)).foregroundStyle(.tertiary)
             Text(title).font(.headline)
             Text(message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .lineLimit(Self.messageMaxLines)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(minWidth: 0, maxWidth: Self.messageMaxWidth)
+                .clipped()
             if let action {
                 Button(action.label, action: action.run).buttonStyle(.glassProminent)
             }

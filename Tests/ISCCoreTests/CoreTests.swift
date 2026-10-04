@@ -325,3 +325,44 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
     #expect(list.items[1].isFinished)
     #expect(list.items[1].failedMessage == nil)
 }
+
+@Test func providerConsoleURLIsOptionalAndHTTPSOnly() throws {
+    // 内核没登记凭据页面时不能因为缺字段就整份目录解不出来 ——
+    // 那会让"添加凭据"整页空掉（ProviderCapabilities 上犯过同样的错）。
+    let list = try decode(ProviderList.self, """
+    {"items":[
+      {"name":"cloudflare","display_name":"Cloudflare","tier":1,
+       "capabilities":{"available":true,"verify":true},
+       "credential_fields":[{"key":"token","label":"API 令牌","secret":true,"required":true}],
+       "console_url":"https://dash.cloudflare.com/profile/api-tokens"},
+      {"name":"mystery","display_name":"Mystery","tier":2,
+       "capabilities":{"available":true},
+       "credential_fields":[]}
+    ]}
+    """)
+    #expect(list.items.count == 2)
+
+    let cloudflare = list.items[0]
+    #expect(cloudflare.consoleUrl == "https://dash.cloudflare.com/profile/api-tokens")
+    #expect(cloudflare.credentialPageURL?.host() == "dash.cloudflare.com")
+
+    // 没有登记的服务商：没有地址，界面就不该给"去配置"按钮。
+    #expect(list.items[1].consoleUrl == nil)
+    #expect(list.items[1].credentialPageURL == nil)
+}
+
+@Test func providerConsoleURLRejectsNonHTTPS() throws {
+    // 这个地址会被直接交给系统浏览器打开，而它来自内核（外部数据）。
+    // http 的凭据页面本就不该存在；真出现了也不该由我们替用户打开。
+    func provider(_ url: String) throws -> Provider {
+        try decode(Provider.self, """
+        {"name":"x","display_name":"X","tier":1,"capabilities":{},
+         "credential_fields":[],"console_url":"\(url)"}
+        """)
+    }
+    #expect(try provider("http://example.com/keys").credentialPageURL == nil)
+    #expect(try provider("javascript:alert(1)").credentialPageURL == nil)
+    #expect(try provider("file:///etc/passwd").credentialPageURL == nil)
+    #expect(try provider("not a url").credentialPageURL == nil)
+    #expect(try provider("https://example.com/keys").credentialPageURL != nil)
+}

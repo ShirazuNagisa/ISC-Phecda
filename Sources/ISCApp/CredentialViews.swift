@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import ISCCore
 
 /// 凭据管理：列出、校验、删除，以及新建。
@@ -163,6 +164,10 @@ struct CredentialFormView: View {
     @State private var values: [String: String] = [:]
     @State private var busy = false
     @State private var failure: String?
+    /// 本次表单里已经替用户打开过配置页的服务商。
+    ///
+    /// 用它去重：用户在下拉里来回比较几家时，不该每选一次就弹一个标签页。
+    @State private var openedCredentialPages: Set<String> = []
 
     private var provider: Provider? {
         model.providers.first { $0.name == providerName }
@@ -180,12 +185,15 @@ struct CredentialFormView: View {
                             Text(item.displayName).tag(String?.some(item.name))
                         }
                     }
-                    .onChange(of: providerName) { _, _ in values = [:] }
+                    .onChange(of: providerName) { previous, _ in
+                        providerChanged(from: model.providers.first { $0.name == previous })
+                    }
 
                     TextField(tr("名称（自己认得就行）", "Label (anything you recognise)"), text: $label)
                         .textFieldStyle(.roundedBorder)
 
                     if let provider {
+                        credentialPageButton(provider)
                         ForEach(provider.credentialFields) { field in
                             fieldInput(field)
                         }
@@ -211,6 +219,53 @@ struct CredentialFormView: View {
             .padding(16)
         }
         .frame(width: 520, height: 520)
+    }
+
+    /// 选完服务商之后要做两件事：把名字填好、把用户送到拿凭据的那一页。
+    ///
+    /// 都是"能替用户做就替用户做"的部分：名字几乎总是服务商名，
+    /// 而 API 凭据页面这几家都藏得不浅（Cloudflare 在"我的个人资料 →
+    /// API 令牌"下面两层），让用户自己找一遍纯属摩擦 —— 找错地方还会
+    /// 顺手把权限过大的 Global API Key 抄出来。
+    private func providerChanged(from previous: Provider?) {
+        values = [:]
+        guard let provider else { return }
+
+        // 只在用户没自己起过名字时覆盖：手填的名称比自动填的更有信息量。
+        let current = label.trimmingCharacters(in: .whitespaces)
+        if current.isEmpty || current == previous?.displayName {
+            label = provider.displayName
+        }
+
+        openCredentialPage(provider)
+    }
+
+    private func openCredentialPage(_ provider: Provider) {
+        guard let url = provider.credentialPageURL,
+              openedCredentialPages.insert(provider.name).inserted else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// 配置页的入口按钮。
+    ///
+    /// 自动打开之外仍然留一个按钮：用户可能把标签页关掉了，或者浏览器
+    /// 拦下了这次打开；没有按钮的话就只剩"重选一次服务商"这种笨办法。
+    @ViewBuilder private func credentialPageButton(_ provider: Provider) -> some View {
+        if let url = provider.credentialPageURL {
+            HStack(spacing: 6) {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label(tr("打开 \(provider.displayName) 的 API 凭据页面",
+                             "Open the \(provider.displayName) API credentials page"),
+                          systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(.glass).controlSize(.small)
+                Text(tr("在那里创建好凭据，再粘回下面的输入框。",
+                        "Create the credential there, then paste it below."))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
     }
 
     @ViewBuilder private func fieldInput(_ field: ProviderField) -> some View {

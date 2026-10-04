@@ -16,6 +16,7 @@ struct DNSView: View {
     @State private var loading = false
     @State private var failure: String?
     @State private var showingAdd = false
+    @State private var editing: DNSRecord?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -50,8 +51,17 @@ struct DNSView: View {
         }
         .sheet(isPresented: $showingAdd) {
             if let credentialID, let zone {
-                AddRecordView(zone: zone) { request in
+                RecordFormView(zone: zone, existing: nil) { request in
                     _ = try await model.kernel.createRecord(credentialID: credentialID, zone: zone, request)
+                    await loadRecords()
+                }
+            }
+        }
+        .sheet(item: $editing) { record in
+            if let credentialID, let zone {
+                RecordFormView(zone: zone, existing: record) { request in
+                    _ = try await model.kernel.updateRecord(credentialID: credentialID, zone: zone,
+                                                            recordID: record.id, request)
                     await loadRecords()
                 }
             }
@@ -129,6 +139,8 @@ struct DNSView: View {
                         if let ttl = record.ttl {
                             Text("TTL \(ttl)").font(.caption2).foregroundStyle(.tertiary)
                         }
+                        Button { editing = record } label: { Image(systemName: "pencil") }
+                            .buttonStyle(.borderless)
                         Button(role: .destructive) {
                             Task { await delete(record) }
                         } label: { Image(systemName: "trash") }
@@ -188,56 +200,100 @@ struct DNSView: View {
     }
 }
 
-struct AddRecordView: View {
+/// 新建或修改一条解析记录。
+///
+/// 修改走 PUT 而不是"删了再建"：后者在中间会有一段时间这个域名解析不到
+/// 任何东西，对正在访问的用户就是一次中断。
+struct RecordFormView: View {
     let zone: String
+    /// 为空表示新建。
+    let existing: DNSRecord?
     let submit: (DNSRecordRequest) async throws -> Void
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
     @State private var type = "A"
     @State private var content = ""
-    @State private var ttl = "600"
+    @State private var ttl = ""
+    @State private var proxied = false
+    @State private var comment = ""
     @State private var busy = false
     @State private var failure: String?
+    @State private var loaded = false
 
     private let types = ["A", "AAAA", "CNAME", "TXT", "MX"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(tr("在 \(zone) 添加解析", "Add a record in \(zone)")).font(.headline)
+            Text(existing == nil
+                 ? tr("在 \(zone) 添加解析", "Add a record in \(zone)")
+                 : tr("修改 \(zone) 中的解析", "Edit the record in \(zone)"))
+                .font(.headline)
 
-            TextField(tr("名称（例如 www 或 @）", "Name (e.g. www or @)"), text: $name)
-                .textFieldStyle(.roundedBorder)
-            Picker(tr("类型", "Type"), selection: $type) {
-                ForEach(types, id: \.self) { Text($0).tag($0) }
+            HStack(spacing: 10) {
+                TextField(tr("名称（例如 www 或 @）", "Name (e.g. www or @)"), text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(existing != nil)
+                Picker("", selection: $type) {
+                    ForEach(types, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 100)
+                .disabled(existing != nil)
             }
-            .pickerStyle(.segmented)
+            if existing != nil {
+                Text(tr("名称与类型不可修改；要换的话删掉重建。",
+                        "The name and type cannot be changed; delete and recreate to change them."))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             TextField(tr("内容（IP 或目标）", "Content (IP or target)"), text: $content)
                 .textFieldStyle(.roundedBorder)
-            TextField(tr("TTL", "TTL"), text: $ttl)
+            TextField(tr("TTL（留空用服务商默认值）", "TTL (empty for the provider default)"), text: $ttl)
                 .textFieldStyle(.roundedBorder)
+            TextField(tr("备注（可选）", "Comment (optional)"), text: $comment)
+                .textFieldStyle(.roundedBorder)
+            Toggle(tr("经由服务商代理", "Proxied through the provider"), isOn: $proxied)
+                .toggleStyle(.switch)
 
             if let failure {
-                Text(failure).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                Text(failure).font(.caption).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
                 Spacer()
                 Button(tr("取消", "Cancel")) { dismiss() }
-                Button(tr("添加", "Add")) { Task { await add() } }
+                Button(existing == nil ? tr("添加", "Add") : tr("保存", "Save")) { Task { await save() } }
                     .buttonStyle(.glassProminent)
                     .disabled(name.isEmpty || content.isEmpty || busy)
             }
         }
         .padding(22)
-        .frame(width: 420)
+        .frame(width: 460)
+        .task { load() }
     }
 
-    private func add() async {
+    private func load() {
+        guard !loaded, let existing else { loaded = true; return }
+        name = existing.name
+        type = existing.type
+        content = existing.content
+        ttl = existing.ttl.map(String.init) ?? ""
+        proxied = existing.proxied ?? false
+        comment = existing.comment ?? ""
+        loaded = true
+    }
+
+    private func save() async {
         busy = true
         failure = nil
         do {
-            let request = DNSRecordRequest(name: name, type: type, content: content, ttl: Int(ttl))
+            var request = DNSRecordRequest(name: name, type: type, content: content)
+            if let value = Int(ttl.trimmingCharacters(in: .whitespaces)) { request.ttl = value }
+            request.proxied = proxied
+            if !comment.trimmingCharacters(in: .whitespaces).isEmpty { request.comment = comment }
             try await submit(request)
             dismiss()
         } catch {

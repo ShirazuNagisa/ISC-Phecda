@@ -10,8 +10,9 @@ enum KernelPhase: Equatable { case stopped, starting, running, stopping, failed 
 /// 取值与内核的 `AdvisoryActionNavigation` 一一对应；对不上的取值会被忽略
 /// （旧内核 + 新界面，或反过来），而不是崩掉。
 enum RequestedSheet: String, Identifiable {
-    case credentials, settings, ddns
+    case credentials, settings, ddns, jobs
     var id: String { rawValue }
+
 }
 
 /// 界面左侧的三个分区。
@@ -118,6 +119,11 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     func metrics(for appID: String) -> AppMetrics? {
         metrics?.apps.first { $0.appId == appID }
+    }
+
+    /// 还没结束的任务。首页据此显示"正在做什么"，而不是只转一个圈。
+    var activeJobs: [JobInfo] {
+        jobs.filter { !$0.isFinished }
     }
 
     // MARK: 内核生命周期

@@ -499,3 +499,26 @@ public struct JobInfo: Decodable, Sendable, Identifiable {
 public struct JobList: Decodable, Sendable {
     public let items: [JobInfo]
 }
+
+/// 一条审计记录：内核做过什么。
+///
+/// 与任务的区别：任务是"用户发起的一件耗时的事"，审计是"内核做过的任何一次
+/// 改动"。用户想弄清"谁把这个设置改了"时要看的是后者。
+public struct AuditEntry: Decodable, Sendable, Identifiable {
+    public let id: String
+    public let ts: Date
+    public let action: String
+    public let target: String?
+    /// `success` 或 `failure`。
+    public let result: String
+    public let detail: String?
+    public let requestId: String?
+    public let remote: String?
+
+    public var failed: Bool { result != "success" }
+}
+
+public struct AuditList: Decodable, Sendable {
+    public let items: [AuditEntry]
+    public let nextCursor: String?
+}

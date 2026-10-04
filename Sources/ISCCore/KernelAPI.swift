@@ -254,6 +254,16 @@ extension KernelClient {
         return try await send("POST", path, body: request, as: DNSRecord.self)
     }
 
+    /// 修改一条已有的解析记录。
+    ///
+    /// 用 PUT 而不是重建：改一条 A 记录的地址时删了再建，中间会有一段时间
+    /// 这个域名**解析不到任何东西** —— 对正在访问的用户就是一次中断。
+    public func updateRecord(credentialID: String, zone: String, recordID: String,
+                             _ request: DNSRecordRequest) async throws -> DNSRecord {
+        let path = "/v1/credentials/\(Self.pathComponent(credentialID))/zones/\(Self.pathComponent(zone))/records/\(Self.pathComponent(recordID))"
+        return try await send("PUT", path, body: request, as: DNSRecord.self)
+    }
+
     public func deleteRecord(credentialID: String, zone: String, recordID: String) async throws {
         let path = "/v1/credentials/\(Self.pathComponent(credentialID))/zones/\(Self.pathComponent(zone))/records/\(Self.pathComponent(recordID))"
         try await sendIgnoringReply("DELETE", path)
@@ -271,6 +281,18 @@ extension KernelClient {
 
     public func jobs() async throws -> [JobInfo] {
         try await send("GET", "/v1/jobs", body: Optional<Never>.none, as: JobList.self).items
+    }
+
+    public func cancelJob(_ id: String) async throws {
+        try await sendIgnoringReply("POST", "/v1/jobs/\(Self.pathComponent(id))/cancel")
+    }
+
+    public func audit(action: String? = nil, result: String? = nil) async throws -> [AuditEntry] {
+        var query: [String] = []
+        if let action, !action.isEmpty { query.append("action=\(Self.pathComponent(action))") }
+        if let result, !result.isEmpty { query.append("result=\(Self.pathComponent(result))") }
+        let path = query.isEmpty ? "/v1/audit" : "/v1/audit?" + query.joined(separator: "&")
+        return try await send("GET", path, body: Optional<Never>.none, as: AuditList.self).items
     }
 
     public func job(_ id: String) async throws -> JobInfo {
@@ -327,7 +349,7 @@ public struct CredentialInput: Encodable, Sendable {
     }
 }
 
-/// 新建一条 DNS 解析记录。
+/// 新建或修改一条 DNS 解析记录。
 public struct DNSRecordRequest: Encodable, Sendable {
     public var name: String
     public var type: String
@@ -343,5 +365,11 @@ public struct DNSRecordRequest: Encodable, Sendable {
         self.ttl = ttl
         self.proxied = proxied
         self.comment = comment
+    }
+
+    /// 从一条已有记录构造编辑用的请求。
+    public init(from record: DNSRecord) {
+        self.init(name: record.name, type: record.type, content: record.content,
+                  ttl: record.ttl, proxied: record.proxied, comment: record.comment)
     }
 }

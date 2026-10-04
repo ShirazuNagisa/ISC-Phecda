@@ -27,6 +27,8 @@ struct RootView: View {
                 SettingsView(model: model)
             case .ddns:
                 DDNSTaskListView(model: model)
+            case .jobs:
+                JobsView(model: model)
             }
         }
     }
@@ -156,6 +158,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                activeJobsSection
                 metricsSection
                 advisoriesSection
                 servicesSection
@@ -165,6 +168,58 @@ struct HomeView: View {
             .padding(22)
         }
         .navigationTitle(AppSection.home.title)
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    model.requestedSheet = .jobs
+                } label: {
+                    if model.activeJobs.isEmpty {
+                        Label(tr("任务", "Tasks"), systemImage: "list.bullet.rectangle")
+                    } else {
+                        Label(tr("任务（\(model.activeJobs.count) 进行中）",
+                                 "Tasks (\(model.activeJobs.count) running)"),
+                              systemImage: "list.bullet.rectangle")
+                    }
+                }
+            }
+        }
+    }
+
+    /// 进行中的任务。
+    ///
+    /// 单独一块而不是只转个圈：一次部署包含准备运行时、装依赖、构建、启动
+    /// 好几步，用户需要知道现在卡在哪一步 —— 尤其当某一步要下载几百 MB 时。
+    @ViewBuilder private var activeJobsSection: some View {
+        if !model.activeJobs.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(tr("进行中", "In progress")).font(.headline)
+                ForEach(model.activeJobs) { job in
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(job.kind == "app.deploy" ? tr("部署站点", "Deploying a site")
+                                 : job.kind == "runtime.provision" ? tr("准备运行时", "Provisioning a runtime")
+                                 : job.kind)
+                                .font(.callout)
+                            if let message = job.message, !message.isEmpty {
+                                Text(message).font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        if let progress = job.progress, progress > 0 {
+                            Text(progress.formattedPercent).font(.caption).monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Button(tr("查看", "View")) { model.requestedSheet = .jobs }
+                            .buttonStyle(.glass).controlSize(.small)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                }
+            }
+        }
     }
 
     @ViewBuilder private var metricsSection: some View {

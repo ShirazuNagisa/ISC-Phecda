@@ -292,3 +292,36 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
     #expect(callAction.method == "PATCH")
     #expect(callAction.body?["proxy_enabled"] == .bool(true))
 }
+
+@Test func auditEntryDecodingCarriesResultAndDetail() throws {
+    let json = """
+    {"items":[{"id":"e1","ts":"2026-10-04T07:49:09Z","action":"app.deploy",
+               "target":"我的站点","result":"failure","detail":"npm install failed",
+               "request_id":"r1","remote":"local"}],
+     "next_cursor":"c2"}
+    """
+    let list = try decode(AuditList.self, json)
+    let entry = try #require(list.items.first)
+    #expect(entry.action == "app.deploy")
+    #expect(entry.failed)
+    #expect(entry.detail == "npm install failed")
+    #expect(list.nextCursor == "c2")
+}
+
+@Test func jobListDecodingDistinguishesFinishedFromRunning() throws {
+    // 这条区分决定界面显示"取消"还是"完成"，也决定首页要不要显示进度条。
+    let json = """
+    {"items":[
+      {"id":"j1","kind":"app.deploy","status":"running","progress":0.4,"message":"正在构建",
+       "created_at":"2026-10-04T07:00:00Z"},
+      {"id":"j2","kind":"runtime.provision","status":"succeeded",
+       "created_at":"2026-10-04T06:00:00Z","finished_at":"2026-10-04T06:05:00Z"}
+    ]}
+    """
+    let list = try decode(JobList.self, json)
+    #expect(list.items.count == 2)
+    #expect(list.items[0].isFinished == false)
+    #expect(list.items[0].progress == 0.4)
+    #expect(list.items[1].isFinished)
+    #expect(list.items[1].failedMessage == nil)
+}

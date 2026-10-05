@@ -12,6 +12,33 @@ cp "$BIN/ISCPhecda" "$APP/Contents/MacOS/ISCPhecda"
 cp "$ROOT/Vendor/ISC/libisc.dylib" "$APP/Contents/Frameworks/libisc.dylib"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
+# 资源目录（应用图标 + 菜单栏图标）编译成 Assets.car。
+#
+# # 为什么用 actool 而不是 iconutil 做一个 .icns
+#
+# 深色/浅色两套图标只有**资源目录**能承载：经典的 `.icns` 格式里没有
+# "外观变体"这个概念，而 macOS 26 的深色图标正是靠 `appearances` 表达的。
+# 走 `.icns` 的话，深色图标会被静默丢掉 —— 系统只会用浅色那张，
+# 而这件事在界面上看不出来（用户不会知道"本该有深色版"）。
+#
+# 菜单栏图标同理：它的 `template-rendering-intent` 也只有资源目录能表达。
+#
+# `--app-icon AppIcon` 会额外产出 `CFBundleIconName` 需要的信息，
+# 所以 Info.plist 里写的是 `CFBundleIconName` 而不是 `CFBundleIconFile`。
+ACTOOL_OUT="$ROOT/Build/actool"
+rm -rf "$ACTOOL_OUT"
+mkdir -p "$ACTOOL_OUT"
+xcrun actool "$ROOT/Resources/Assets.xcassets" \
+  --compile "$ACTOOL_OUT" \
+  --platform macosx \
+  --minimum-deployment-target 14.0 \
+  --app-icon AppIcon \
+  --output-partial-info-plist "$ACTOOL_OUT/partial.plist" \
+  --output-format human-readable-text >/dev/null
+cp "$ACTOOL_OUT/Assets.car" "$APP/Contents/Resources/Assets.car"
+# actool 的产物里有 .icns，直接放进 Resources 满足老的 `CFBundleIconFile` 路径
+for f in "$ACTOOL_OUT"/*.icns; do [ -e "$f" ] && cp "$f" "$APP/Contents/Resources/"; done
+
 # 不要对 libisc.dylib 执行 `codesign --force --sign -`。
 #
 # Go 用 c-shared 产出的库已经带**链接器签名**（adhoc, linker-signed），它是

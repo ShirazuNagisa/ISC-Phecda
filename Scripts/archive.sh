@@ -105,6 +105,11 @@ xcodebuild -exportArchive \
   -exportPath "$EXPORT" \
   -exportOptionsPlist "$ROOT/Scripts/ExportOptions-AppStore.plist"
 
+# 上传前自检 —— 把"上传时才告诉你"的事情提前。
+for app in "$EXPORT"/*.app "$ARCHIVE/Products/Applications"/*.app; do
+  [ -d "$app" ] && { echo; "$ROOT/Scripts/check-submission.sh" "$app"; break; }
+done
+
 echo "→ 导出的包："
 ls -la "$EXPORT" | awk 'NR>3 {printf "    %-52s %s\n", $9, $5}'
 echo

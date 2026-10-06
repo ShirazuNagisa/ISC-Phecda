@@ -7,7 +7,7 @@ import ISCCore
 ///
 /// # 为什么这一页值得单独存在
 ///
-/// 它开启的不是一个设置开关，而是**把内核的管理面暴露到局域网上**。
+/// 它开启的不是一个设置开关，而是**把内核的管理面在网络上暴露一份**。
 /// 因此这一页需要回答三个问题，而且都要用看得见的东西回答：
 ///
 ///   1. 现在到底开着没有（不是"设置里是 true"，而是"端口真的在听"）；
@@ -103,8 +103,8 @@ struct RemoteView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Text(tr("远程访问", "Remote Access"))
                 .font(.title2.weight(.semibold))
-            Text(tr("让 iPhone、iPad 与 Apple Watch 上的 ISC Mizar 在同局域网内查看这台机器的服务状态与资源占用，并远程改动 DNS 解析。",
-                    "Let ISC Mizar on iPhone, iPad and Apple Watch watch this machine's services and resource usage over the LAN, and edit DNS records from afar."))
+            Text(tr("让 iPhone、iPad 与 Apple Watch 上的 ISC Mizar 查看这台机器的服务状态与资源占用，并远程改动 DNS 解析。手机在同一个局域网里直接连；服务端有公网地址时，手机在任何网络下都能连（见下面的公网访问）。",
+                    "Let ISC Mizar on iPhone, iPad and Apple Watch watch this machine's services and resource usage, and edit DNS records from afar. The phone connects directly when it is on the same network, and from anywhere once this machine has a public address (see public access below)."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -178,8 +178,8 @@ struct RemoteView: View {
         EmptyHint(
             symbol: "antenna.radiowaves.left.and.right.slash",
             title: tr("远程访问未开启", "Remote access is off"),
-            message: tr("开启之后，手机才能连上这台机器。默认关闭：在局域网上开一个口子是需要你明确决定的动作。",
-                        "Turn it on so your phone can reach this machine. It is off by default: opening a port on the LAN should be a deliberate choice."))
+            message: tr("开启之后，手机才能连上这台机器。默认关闭：在网络上开一个口子是需要你明确决定的动作。",
+                        "Turn it on so your phone can reach this machine. It is off by default: opening a port should be a deliberate choice."))
     }
 
     // MARK: - 配对

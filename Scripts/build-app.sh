@@ -42,7 +42,7 @@ cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
 ACTOOL_OUT="$ROOT/Build/actool"
 rm -rf "$ACTOOL_OUT"
 mkdir -p "$ACTOOL_OUT"
-xcrun actool "$ROOT/Sources/ISCApp/Assets.xcassets" \
+xcrun actool "$ROOT/Resources/Assets.xcassets" \
   --compile "$ACTOOL_OUT" \
   --platform macosx \
   --minimum-deployment-target 14.0 \

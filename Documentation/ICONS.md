@@ -16,7 +16,7 @@
 |---|---|
 | `App/Mizar-iOS/Assets.xcassets/AppIcon.appiconset` | 1024px 亮 + 暗（`platform: ios` 与 `watchos` 两组） |
 | `App/Mizar-watchOS/Assets.xcassets/AppIcon.appiconset` | 同上（两个 target 各一份，避免共享目录的成员归属问题） |
-| `ISC-Phecda/Sources/ISCApp/Assets.xcassets/AppIcon.appiconset` | 16/32/128/256/512 × @1x/@2x，各含亮 + 暗 |
+| `ISC-Phecda/Resources/Assets.xcassets/AppIcon.appiconset` | 16/32/128/256/512 × @1x/@2x，各含亮 + 暗 |
 | `ISC-Phecda/Sources/ISCApp/Assets.xcassets/MenuBarIcon.imageset` | 18px / 36px（1x/2x），`template-rendering-intent: template` |
 
 ## 资源目录为什么要声明在 Package.swift 里

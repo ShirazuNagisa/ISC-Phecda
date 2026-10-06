@@ -555,6 +555,12 @@ public struct KernelSettings: Codable, Sendable {
     public var proxyEnabled: Bool?
     public var proxyPort: Int?
     public var proxyTls: Bool?
+    /// Cloudflare 隧道。见 REST 契约里 Settings.tunnel_enabled 的说明：
+    /// 它解决的是直连模型解决不了的那类网络（CGNAT 家宽、校园网），
+    /// 与 proxyEnabled 是**叠加**关系 —— 隧道把流量送到本机反代上。
+    public var tunnelEnabled: Bool?
+    /// cloudflared 的路径；留空则自动寻找。
+    public var tunnelBinary: String?
     public var acmeEmail: String?
     public var acmeDirectory: String?
     public var acmeDnsCredentialId: String?
@@ -815,5 +821,37 @@ public struct RemoteDevicePatch: Encodable, Sendable {
         self.label = label
         self.role = role
         self.notificationsEnabled = notificationsEnabled
+    }
+}
+
+
+// MARK: - Cloudflare 隧道
+
+/// 隧道的运行状态。
+///
+/// `state` 有六种取值而不是一个布尔量：用户真正需要知道的是**卡在哪一步**，
+/// 而"没开""缺 cloudflared""缺授权""连不上"要采取的动作完全不同。
+/// 只把它当开关读的界面会把后四种混成"开着但没用"。
+public struct TunnelStatus: Decodable, Sendable {
+    public let enabled: Bool
+    public let state: String
+    public let name: String
+    public let id: String?
+    public let hostname: String?
+    public let connections: Int
+    public let binary: String?
+    public let proxyPort: Int
+    public let lastError: String?
+    public let logTail: [String]?
+
+    /// 已经连上 Cloudflare 边缘，可以承载流量。
+    public var isRunning: Bool { state == "running" }
+
+    /// 是否卡住了（需要用户做点什么才能跑起来）。
+    ///
+    /// 只回答"卡没卡住"，**不回答"卡在哪"** —— 后者是要显示给用户看的话，
+    /// 而文案属于界面层（这一层没有 tr）。
+    public var isBlocked: Bool {
+        state == "no_binary" || state == "no_account" || state == "failed"
     }
 }

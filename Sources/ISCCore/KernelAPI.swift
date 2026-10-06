@@ -181,6 +181,24 @@ extension KernelClient {
         try await send("GET", "/v1/proxy/status", body: Optional<Never>.none, as: ProxyStatus.self)
     }
 
+    // MARK: - Cloudflare 隧道
+
+    public func tunnelStatus() async throws -> TunnelStatus {
+        try await send("GET", "/v1/tunnel", body: Optional<Never>.none, as: TunnelStatus.self)
+    }
+
+    /// 开启隧道。
+    ///
+    /// 走专门的端点而不是 PATCH 设置：开关与"真的把它跑起来"是同一件事的
+    /// 两半，分开发请求会让中间那一刻的状态没有意义。
+    public func enableTunnel() async throws -> TunnelStatus {
+        try await send("POST", "/v1/tunnel/enable", body: Optional<Never>.none, as: TunnelStatus.self)
+    }
+
+    public func disableTunnel() async throws -> TunnelStatus {
+        try await send("POST", "/v1/tunnel/disable", body: Optional<Never>.none, as: TunnelStatus.self)
+    }
+
     public func certificates() async throws -> [CertificateInfo] {
         try await send("GET", "/v1/certs", body: Optional<Never>.none, as: CertificateList.self).items
     }

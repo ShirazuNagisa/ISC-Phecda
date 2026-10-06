@@ -16,8 +16,27 @@
 |---|---|
 | `App/Mizar-iOS/Assets.xcassets/AppIcon.appiconset` | 1024px 亮 + 暗（`platform: ios` 与 `watchos` 两组） |
 | `App/Mizar-watchOS/Assets.xcassets/AppIcon.appiconset` | 同上（两个 target 各一份，避免共享目录的成员归属问题） |
-| `ISC-Phecda/Resources/Assets.xcassets/AppIcon.appiconset` | 16/32/128/256/512 × @1x/@2x，各含亮 + 暗 |
-| `ISC-Phecda/Resources/Assets.xcassets/MenuBarIcon.imageset` | 18/36/54px，`template-rendering-intent: template` |
+| `ISC-Phecda/Sources/ISCApp/Assets.xcassets/AppIcon.appiconset` | 16/32/128/256/512 × @1x/@2x，各含亮 + 暗 |
+| `ISC-Phecda/Sources/ISCApp/Assets.xcassets/MenuBarIcon.imageset` | 18px / 36px（1x/2x），`template-rendering-intent: template` |
+
+## 资源目录为什么要声明在 Package.swift 里
+
+它同时被两条构建路径使用，而两条路取资源的方式不同：
+
+- `Scripts/build-app.sh` 用 `actool` 把整个目录编成 `Assets.car` 放进 `.app`；
+- `swift build` / Xcode 走 SwiftPM，把目录编成 `ISCPhecda_ISCApp.bundle`。
+
+**后者需要 Package.swift 里的 `resources:` 声明。** 没有它，SwiftPM 那条路
+产物里一个资源都没有 —— 而症状是静默的：`Image("AppMark")` 只是一片空白，
+不报错。菜单栏图标也一直受这个影响，只是它有 SF Symbol 兜底所以没人发现。
+
+取用时必须写 `bundle: .module`：`Image("…")` 默认只在**主 bundle** 里找，
+从 Xcode 跑时主 bundle 里什么都没有。
+
+注意 `Bundle.module` 在找不到 bundle 时是 `fatalError`，因此 `build-app.sh`
+必须把那个 bundle 拷进 `Contents/Resources/` —— 脚本里对此有显式检查。
+它在本机开发时可能仍然跑得起来（访问器里有指向 `.build` 的兜底路径），
+所以这个问题只会在分发出去之后才暴露。
 
 ## 两个必须做对的地方
 

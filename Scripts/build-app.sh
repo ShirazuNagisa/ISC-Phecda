@@ -12,6 +12,20 @@ cp "$BIN/ISCPhecda" "$APP/Contents/MacOS/ISCPhecda"
 cp "$ROOT/Vendor/ISC/libisc.dylib" "$APP/Contents/Frameworks/libisc.dylib"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
+# 把 SwiftPM 的资源 bundle 一并拷进去。
+#
+# 不拷的后果不是"少个图标"而是**崩溃**：SwiftPM 生成的 Bundle.module 在
+# 找不到这个 bundle 时是 fatalError。它在开发机上可能仍然能跑 —— 访问器
+# 里有一条指向 .build 的路径兜底 —— 于是问题只在分发出去之后才出现。
+RESOURCE_BUNDLE="$BIN/ISC-Phecda_ISCApp.bundle"
+if [ ! -d "$RESOURCE_BUNDLE" ]; then
+  echo "❌ 找不到 SwiftPM 资源 bundle：$RESOURCE_BUNDLE" >&2
+  echo "   先跑 swift build -c release，再重新打包。" >&2
+  exit 1
+fi
+rm -rf "$APP/Contents/Resources/ISC-Phecda_ISCApp.bundle"
+cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
+
 # 资源目录（应用图标 + 菜单栏图标）编译成 Assets.car。
 #
 # # 为什么用 actool 而不是 iconutil 做一个 .icns
@@ -28,7 +42,7 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 ACTOOL_OUT="$ROOT/Build/actool"
 rm -rf "$ACTOOL_OUT"
 mkdir -p "$ACTOOL_OUT"
-xcrun actool "$ROOT/Resources/Assets.xcassets" \
+xcrun actool "$ROOT/Sources/ISCApp/Assets.xcassets" \
   --compile "$ACTOOL_OUT" \
   --platform macosx \
   --minimum-deployment-target 14.0 \

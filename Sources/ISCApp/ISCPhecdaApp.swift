@@ -64,7 +64,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     ///    网络图标，也不要让菜单栏上出现一个空白区域（那样用户连点都点不到）。
     static func menuBarImage() -> NSImage {
         let fallback = NSImage(systemSymbolName: "network", accessibilityDescription: "ISC Phecda")
-        guard let image = NSImage(named: "MenuBarIcon") else { return fallback ?? NSImage() }
+        // 两个来源都要试：资源目录是 ISCApp 的 SwiftPM 资源（编进
+        // ISCPhecda_ISCApp.bundle），而手工打的 .app 里 Assets.car 直接放在
+        // Contents/Resources，主 bundle 找得到。
+        //
+        // 只试其中一个的后果是静默的：图标变成通用符号，而代码看起来没问题。
+        let image = Bundle.module.image(forResource: "MenuBarIcon") ?? NSImage(named: "MenuBarIcon")
+        guard let image else { return fallback ?? NSImage() }
         image.isTemplate = true
         image.size = NSSize(width: 18, height: 18)
         return image

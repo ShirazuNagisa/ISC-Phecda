@@ -13,11 +13,6 @@
       "filename": "menubar@2x.png",
       "idiom": "mac",
       "scale": "2x"
-    },
-    {
-      "filename": "menubar@3x.png",
-      "idiom": "mac",
-      "scale": "3x"
     }
   ],
   "properties": {

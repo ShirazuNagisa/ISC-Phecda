@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  导出给 App Store Connect 用的选项。
+
+  method = app-store-connect：产出 .pkg，由 Transporter 或 altool 上传。
+  不要用 deprecated 的 `app-store`，Xcode 15 起会告警。
+
+  signingStyle = automatic：签名交给 Xcode，用账号里已配置的证书与描述文件。
+  想手工指定的话改成 manual，并补上 teamID / provisioningProfiles。
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<!-- 审核要看的东西：不上传符号会让崩溃报告没有可读的堆栈。 -->
+	<key>stripSwiftSymbols</key>
+	<true/>
+</dict>
+</plist>

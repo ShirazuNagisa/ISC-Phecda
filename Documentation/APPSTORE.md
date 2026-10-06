@@ -243,6 +243,43 @@ rpath 引用，那条路在签名分发下走不通。
 
 ### 阶段 4 · 签名、归档、上传
 
+脚本与配置已就位（`Scripts/archive.sh`、`Scripts/ExportOptions-AppStore.plist`），
+但**跑不通** —— 它需要下面这些，全都在你的开发者账号里：
+
+| 需要什么 | 在哪 |
+|---|---|
+| Xcode 里登录开发者账号 | Settings → Accounts |
+| **Apple Distribution** 证书（Mac App Store 分发） | 后台 Certificates |
+| App ID `app.isc.phecda` 已登记 | 后台 Identifiers |
+| Mac App Store 的 provisioning profile | 后台 Profiles |
+
+缺任何一件，`xcodebuild` 都会停在签名那一步 —— **那是预期的失败，不是脚本
+写错了**。想确认脚本本身对不对，看它有没有走到 `CodeSign`。
+
+跑法：
+
+```bash
+DEVELOPMENT_TEAM=<你的团队 ID> Scripts/archive.sh
+```
+
+`ISC_BUNDLED_RUNTIMES` 默认 `php python`（≈110 MB）。要改内置哪几个，
+`archive.sh` 里有一行注释写着三档体积。
+
+**归档会自动触发一次 Release 构建**，而构建阶段 "Bundle Runtimes" 排在
+CodeSign 之前 —— 所以运行时已经在包内、也被签名覆盖了。这正是它必须在
+那里的原因：签名不覆盖之后才放进包里的文件。
+
+#### 上传前建议自查
+
+- **2.5.2**：确认包内没有下载并执行代码的路径（`appstore` 构建标签已处理，
+  可用 `strings` 在 `.pkg` 里的可执行文件上搜 `ErrNoDownloader` 反查）；
+- **沙箱**：确认 entitlements 里有 `com.apple.security.app-sandbox`
+  （`codesign -d --entitlements -` 看）；
+- **体积**：`Contents/Resources/runtimes/` 的大小决定下载时长，也是审核
+  可能提问的地方。
+
+### 阶段 4 的原始计划
+
 - `xcodebuild archive` + 上传 App Store Connect；
 - 逐条对照 App Review Guidelines 自查。
 

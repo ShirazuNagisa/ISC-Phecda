@@ -51,6 +51,28 @@
 		49819CC4F1A616E422B369EF /* libisc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		D5AA43824C573FD487CF953E /* Bundle Runtimes */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Runtimes";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/xcode-bundle-runtimes.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		1E3DE5A8EB987F45C2E2B691 /* Embed Libraries */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -138,6 +160,7 @@
 				E9AC67C993D2511BDAD48561 /* Sources */,
 				B365BE9502C3128F5D540532 /* Frameworks */,
 				483A0E0C9C74F0CBD6A612E6 /* Resources */,
+				D5AA43824C573FD487CF953E /* Bundle Runtimes */,
 				1E3DE5A8EB987F45C2E2B691 /* Embed Libraries */,
 			);
 			buildRules = (

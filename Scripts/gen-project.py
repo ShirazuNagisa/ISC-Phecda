@@ -38,6 +38,7 @@ def main() -> int:
     products_group = uid("group", "Products")
     src_phase = uid("phase", "sources")
     embed_phase = uid("phase", "embed")
+    runtimes_phase = uid("phase", "runtimes")
     dylib_fr = uid("fileref", "libisc")
     dylib_bf = uid("buildfile", "libisc")
     res_phase = uid("phase", "resources")
@@ -91,6 +92,28 @@ def main() -> int:
 \t\t{pkg_fr} /* Package.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; }};
 \t\t{dylib_fr} /* libisc.dylib */ = {{isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; }};
 /* End PBXFileReference section */
+
+/* Begin PBXShellScriptBuildPhase section */
+\t\t{runtimes_phase} /* Bundle Runtimes */ = {{
+\t\t\tisa = PBXShellScriptBuildPhase;
+\t\t\talwaysOutOfDate = 1;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tfiles = (
+\t\t\t);
+\t\t\tinputFileListPaths = (
+\t\t\t);
+\t\t\tinputPaths = (
+\t\t\t);
+\t\t\tname = "Bundle Runtimes";
+\t\t\toutputFileListPaths = (
+\t\t\t);
+\t\t\toutputPaths = (
+\t\t\t);
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t\tshellPath = /bin/sh;
+\t\t\tshellScript = "\\"$SRCROOT/Scripts/xcode-bundle-runtimes.sh\\"\\n";
+\t\t}};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 \t\t{embed_phase} /* Embed Libraries */ = {{
@@ -165,6 +188,7 @@ def main() -> int:
 \t\t\t\t{src_phase} /* Sources */,
 \t\t\t\t{fwk_phase} /* Frameworks */,
 \t\t\t\t{res_phase} /* Resources */,
+\t\t\t\t{runtimes_phase} /* Bundle Runtimes */,
 \t\t\t\t{embed_phase} /* Embed Libraries */,
 \t\t\t);
 \t\t\tbuildRules = (

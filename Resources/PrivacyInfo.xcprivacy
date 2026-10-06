@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  隐私清单。
+
+  2024-05 起，使用"需说明理由的 API"的应用必须带这个文件，否则提交会被拒。
+
+  本应用是一个**跑在用户自己机器上的工具**：不收集任何数据、不做追踪、
+  不上报。因此 CollectedDataTypes 与 TrackingDomains 都是空的 —— 这不是
+  偷懒，而是如实填写。审核看到"零收集"和一个本机工具是自洽的。
+
+  下面列的是唯一一处需要说明理由的 API 用法。
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- CA92.1：读写只有本应用自己能访问的偏好设置。
+				     用途：记住"引导已经看过"、通知开关等界面状态。 -->
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

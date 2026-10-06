@@ -56,6 +56,7 @@ def main() -> int:
             f'\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};')
 
     assets_fr, assets_bf = uid("fileref", "Assets"), uid("buildfile", "Assets")
+    privacy_fr, privacy_bf = uid("fileref", "PrivacyInfo"), uid("buildfile", "PrivacyInfo")
     plist_fr = uid("fileref", "Info.plist")
     entitlements_fr = uid("fileref", "Phecda.entitlements")
     pkg_fr = uid("fileref", "Package.swift")
@@ -79,6 +80,7 @@ def main() -> int:
 /* Begin PBXBuildFile section */
 {buildfile_lines}
 \t\t{assets_bf} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {assets_fr} /* Assets.xcassets */; }};
+\t\t{privacy_bf} /* PrivacyInfo.xcprivacy in Resources */ = {{isa = PBXBuildFile; fileRef = {privacy_fr} /* PrivacyInfo.xcprivacy */; }};
 \t\t{pkg_bf} /* ISCCore in Frameworks */ = {{isa = PBXBuildFile; productRef = {pkg_dep} /* ISCCore */; }};
 \t\t{dylib_bf} /* libisc.dylib in Embed Libraries */ = {{isa = PBXBuildFile; fileRef = {dylib_fr} /* libisc.dylib */; settings = {{ATTRIBUTES = (CodeSignOnCopy, ); }}; }};
 /* End PBXBuildFile section */
@@ -87,6 +89,7 @@ def main() -> int:
 \t\t{prod} /* ISC Phecda.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ISC Phecda.app"; sourceTree = BUILT_PRODUCTS_DIR; }};
 {fileref_lines}
 \t\t{assets_fr} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};
+\t\t{privacy_fr} /* PrivacyInfo.xcprivacy */ = {{isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; }};
 \t\t{plist_fr} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; }};
 \t\t{entitlements_fr} /* Phecda.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; }};
 \t\t{pkg_fr} /* Package.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; }};
@@ -153,6 +156,7 @@ def main() -> int:
 \t\t\tisa = PBXGroup;
 \t\t\tchildren = (
 \t\t\t\t{pkg_fr} /* Package.swift */,
+\t\t\t\t{privacy_fr} /* PrivacyInfo.xcprivacy */,
 \t\t\t\t{app_group} /* Phecda */,
 \t\t\t\t{dylib_fr} /* libisc.dylib */,
 \t\t\t\t{plist_fr} /* Info.plist */,
@@ -246,6 +250,7 @@ def main() -> int:
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
 \t\t\t\t{assets_bf} /* Assets.xcassets in Resources */,
+\t\t\t\t{privacy_bf} /* PrivacyInfo.xcprivacy in Resources */,
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t}};

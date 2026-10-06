@@ -23,6 +23,7 @@
 		91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D14E1EC523B5F101C229441 /* ServicesView.swift */; };
 		49E90B00956BD92C98B608D1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052E6803097DFF8032DE202 /* SettingsView.swift */; };
 		165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AD8FE6F4409ABA226995E31D /* Assets.xcassets */; };
+		BB61120D31B45731F5D7454D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */; };
 		94D617931304E635D18FBB8E /* ISCCore in Frameworks */ = {isa = PBXBuildFile; productRef = 53BF02C4C7C2972709CC49C4 /* ISCCore */; };
 		9901BD8C96498886CB035805 /* libisc.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 49819CC4F1A616E422B369EF /* libisc.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -45,6 +46,7 @@
 		5D14E1EC523B5F101C229441 /* ServicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesView.swift; sourceTree = "<group>"; };
 		2052E6803097DFF8032DE202 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AD8FE6F4409ABA226995E31D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
 		E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; };
 		65DC653B3D2AC8A7EB6F881D /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
@@ -111,6 +113,7 @@
 			isa = PBXGroup;
 			children = (
 				65DC653B3D2AC8A7EB6F881D /* Package.swift */,
+				1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */,
 				E5C7E46CD93DD4B69A6F8AAB /* Phecda */,
 				49819CC4F1A616E422B369EF /* libisc.dylib */,
 				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
@@ -218,6 +221,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */,
+				BB61120D31B45731F5D7454D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

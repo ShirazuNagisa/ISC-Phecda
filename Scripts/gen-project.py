@@ -37,7 +37,6 @@ def main() -> int:
     app_group = uid("group", "Apps/Phecda")
     products_group = uid("group", "Products")
     src_phase = uid("phase", "sources")
-    sign_phase = uid("phase", "presign")
     res_phase = uid("phase", "resources")
     fwk_phase = uid("phase", "frameworks")
     cfg_list_prj = uid("cfglist", "project")
@@ -138,7 +137,6 @@ def main() -> int:
 \t\t\t\t{src_phase} /* Sources */,
 \t\t\t\t{fwk_phase} /* Frameworks */,
 \t\t\t\t{res_phase} /* Resources */,
-\t\t\t\t{sign_phase} /* Pre-sign the executable */,
 \t\t\t);
 \t\t\tbuildRules = (
 \t\t\t);
@@ -189,27 +187,6 @@ def main() -> int:
 /* End PBXProject section */
 
 /* Begin PBXShellScriptBuildPhase section */
-\t\t{sign_phase} /* Pre-sign the executable */ = {{
-\t\t\tisa = PBXShellScriptBuildPhase;
-\t\t\talwaysOutOfDate = 1;
-\t\t\tbuildActionMask = 2147483647;
-\t\t\tfiles = (
-\t\t\t);
-\t\t\tinputFileListPaths = (
-\t\t\t);
-\t\t\tinputPaths = (
-\t\t\t);
-\t\t\tname = "Pre-sign the executable";
-\t\t\toutputFileListPaths = (
-\t\t\t);
-\t\t\toutputPaths = (
-\t\t\t);
-\t\t\trunOnlyForDeploymentPostprocessing = 0;
-\t\t\tshellPath = /bin/sh;
-\t\t\tshellScript = "\\"$SRCROOT/Scripts/pre-sign.sh\\"\\n";
-\t\t}};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXResourcesBuildPhase section */
 \t\t{res_phase} /* Resources */ = {{
 \t\t\tisa = PBXResourcesBuildPhase;

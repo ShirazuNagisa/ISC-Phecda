@@ -60,6 +60,45 @@ Mac App Store 强制开启沙箱，而当前实现有若干处与之冲突：
 要么让用户重新配置，要么先发一个非沙箱版本、由它把数据搬进容器，再发沙箱版本。
 后者是唯一平滑的路子，但意味着**两个版本要按顺序发布**。
 
+## 阶段 1 实测到的两件事（已修正一次误判）
+
+### 1. `CFBundleExecutable` 必须跟着 `PRODUCT_NAME` 走
+
+它写死成 `ISCPhecda`，而工程的 `PRODUCT_NAME` 是 `"ISC Phecda"`。一个不一致
+解释了**三个看起来无关的症状**：
+
+- codesign 找不到主可执行文件 → `code object is not signed at all`（构建失败）；
+- entitlements **没有**被写进签名（`.xcent` 里 7 条齐全，签出来一条都没有）；
+- LaunchServices 报 `The application cannot be opened because its executable
+  is missing` —— 而产物里二进制明明在。
+
+改成 `$(EXECUTABLE_NAME)` 之后三者一起消失。当时我先加了一个"先签可执行文件
+再签 bundle"的构建阶段，那是**在给症状打补丁**；根因修掉后它就不需要了，已删。
+
+### 2. `libisc.dylib` 必须进 bundle 并用同一身份重签
+
+用真实证书（Team `5Q2A46685M`）签名后，应用启动即被 dyld 拒绝：
+
+```
+Library not loaded: @rpath/libisc.dylib
+code signature ... not valid for use in process:
+mapping process and mapped file (non-platform) have different Team IDs
+```
+
+这是**库验证**，不是沙箱。ad-hoc 签名没有 Team ID，所以反而能加载 —— 这也是
+为什么它一直"看起来是好的"。
+
+App Store 的要求很明确：dylib 放进 `Contents/Frameworks/`，用与应用相同的身份
+签名（Xcode 里就是 Embed & Sign）。当前它放在仓库的 `Vendor/ISC/` 并通过绝对
+rpath 引用，那条路在签名分发下走不通。
+
+## 关于沙箱的一个纠正
+
+早先我根据"没有创建容器"判断沙箱没生效，并据此写过结论。**那个判断的依据
+不成立**：ad-hoc 签名下沙箱本就不生效，而换成真实身份后进程还没走到沙箱就
+因为上面的 dylib 问题被 dyld 杀了。**沙箱是否按预期工作，目前仍未验证** ——
+要等 dylib 嵌入之后才能测。
+
 ## 分阶段施工
 
 ### 阶段 0 · 只有你能做

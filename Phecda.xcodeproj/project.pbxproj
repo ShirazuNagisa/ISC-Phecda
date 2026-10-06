@@ -113,7 +113,6 @@
 				E9AC67C993D2511BDAD48561 /* Sources */,
 				B365BE9502C3128F5D540532 /* Frameworks */,
 				483A0E0C9C74F0CBD6A612E6 /* Resources */,
-				DB685728F03589884DA4FA1A /* Pre-sign the executable */,
 			);
 			buildRules = (
 			);
@@ -164,27 +163,6 @@
 /* End PBXProject section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		DB685728F03589884DA4FA1A /* Pre-sign the executable */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Pre-sign the executable";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"$SRCROOT/Scripts/pre-sign.sh\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXResourcesBuildPhase section */
 		483A0E0C9C74F0CBD6A612E6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;

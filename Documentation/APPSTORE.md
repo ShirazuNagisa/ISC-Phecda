@@ -269,7 +269,30 @@ DEVELOPMENT_TEAM=<你的团队 ID> Scripts/archive.sh
 CodeSign 之前 —— 所以运行时已经在包内、也被签名覆盖了。这正是它必须在
 那里的原因：签名不覆盖之后才放进包里的文件。
 
-#### 归档已完成并核对（2026-10-06）
+#### 导出成功（2026-10-06）
+
+```
+** EXPORT SUCCEEDED **
+ISC Phecda.pkg   49,779,328 字节
+```
+
+产物逐项核对：
+
+| 检查 | 结果 |
+|---|---|
+| 应用签名团队 | `5Q2A46685M` |
+| 签名严格校验 | `valid on disk` + `satisfies its Designated Requirement` |
+| 内核里的下载器 | **0 条** |
+| 内置运行时 | php-8.5.8 + cpython-3.13.16 |
+| 包内 `._*` 附属文件 | 无（`pkgutil --payload-files` 里的 `._` 是 cpio 列表的呈现方式，不是真文件） |
+
+**途中修的一个真缺口**：脚本没带 `-allowProvisioningUpdates`。不带它，
+`xcodebuild` 只能用**本机已有**的描述文件，而新项目的 App ID 还没登记过 ——
+报错是 `No profiles for 'app.isc.phecda' were found`，看起来像描述文件建错了，
+其实是没人去建。加上之后 xcodebuild 自己去后台登记 App ID 并创建描述文件，
+一次通过。
+
+#### 归档已完成并核对（第一次，缺证书时）
 
 拿到 Apple Distribution 证书后跑通了归档。**产物逐项核对过**：
 

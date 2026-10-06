@@ -84,7 +84,12 @@ fi
 rm -rf "$ARCHIVE" "$EXPORT"
 mkdir -p "$EXPORT"
 
+# -allowProvisioningUpdates 让 xcodebuild 自己去开发者后台登记 App ID 并创建
+# 描述文件。不带它就只能用**已经存在于本机**的描述文件，而新项目的 App ID
+# 还没登记过 —— 报错是 "No profiles for 'app.isc.phecda' were found"，看起来
+# 像描述文件建错了，其实是没人去建。
 xcodebuild archive \
+  -allowProvisioningUpdates \
   -project "$ROOT/Phecda.xcodeproj" \
   -scheme Phecda \
   -configuration Release \
@@ -95,6 +100,7 @@ xcodebuild archive \
 echo "→ 归档完成：$ARCHIVE"
 
 xcodebuild -exportArchive \
+  -allowProvisioningUpdates \
   -archivePath "$ARCHIVE" \
   -exportPath "$EXPORT" \
   -exportOptionsPlist "$ROOT/Scripts/ExportOptions-AppStore.plist"

@@ -299,7 +299,6 @@ def main() -> int:
 \t\t\t\tINFOPLIST_FILE = Resources/Info.plist;
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
-\t\t\t\t\t"@executable_path/../Frameworks",
 \t\t\t\t);
 \t\t\t\tMARKETING_VERSION = 0.4.2;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
@@ -329,7 +328,6 @@ def main() -> int:
 \t\t\t\tINFOPLIST_FILE = Resources/Info.plist;
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
-\t\t\t\t\t"@executable_path/../Frameworks",
 \t\t\t\t);
 \t\t\t\tMARKETING_VERSION = 0.4.2;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;

@@ -116,13 +116,32 @@ struct NewServiceView: View {
                     Text(tr("需要本机已安装 Docker Desktop。", "Requires Docker Desktop to be installed."))
                         .font(.caption).foregroundStyle(.orange)
                 }
+                // 跑不了时明说，并且**不让继续** —— 让用户填完再失败是最坏的时机。
+                if !selected.isRunnable {
+                    Label(selected.unavailableReason
+                              ?? tr("这一版没有内置它需要的运行时，装了也跑不起来。",
+                                    "This build does not include the runtime it needs, so it cannot run."),
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
 
+    /// 选项文字。
+    ///
+    /// 跑不了的预设**照样列出来但标出来**，而不是藏起来：用户可能正是奔着
+    /// 它来的（比如手里就是个 .NET 项目），藏起来他会以为这个产品不支持，
+    /// 而真相是这一版没内置那个运行时 —— 那是两件完全不同的事。
     private func presetLabel(_ preset: PresetInfo) -> String {
-        let recommended = inspection?.recommendedPresetId == preset.id
-        return recommended ? "\(preset.title) · \(tr("推荐", "recommended"))" : preset.title
+        var parts = [preset.title]
+        if !preset.isRunnable {
+            parts.append(tr("这一版没有内置", "not included in this build"))
+        } else if inspection?.recommendedPresetId == preset.id {
+            parts.append(tr("推荐", "recommended"))
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var detailsStep: some View {
@@ -178,6 +197,11 @@ struct NewServiceView: View {
 
     private var canPublish: Bool {
         guard !sourcePath.isEmpty, !presetID.isEmpty, !name.isEmpty else { return false }
+        // 跑不了的预设不让提交：让用户填完再失败是最坏的时机 —— 他会以为
+        // 是自己哪里填错了，而真相是这一版没内置那个运行时。
+        if let preset = model.presets.first(where: { $0.id == presetID }), !preset.isRunnable {
+            return false
+        }
         if presetID == "custom" { return !customExecutable.isEmpty }
         return true
     }

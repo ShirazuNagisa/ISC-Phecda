@@ -542,3 +542,38 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
     let status = try decode(IPStatus.self, #"{"interfaces":[]}"#)
     #expect(status.suggestsRelay == false)
 }
+
+// MARK: - 预设的"这一版跑不跑得起来"
+
+// 缺省视为可用：旧内核不带这个字段，而把缺省当成不可用会让所有预设都变灰。
+@Test func presetAvailabilityDefaultsToRunnableForOlderKernels() throws {
+    let json = """
+    {"items":[{"id":"node","version":"1","title":"Node","kind":"node","default_port":3000}]}
+    """
+    let preset = try #require(try decode(PresetCatalog.self, json).items.first)
+    #expect(preset.available == nil)
+    #expect(preset.isRunnable, "没有这个字段时应当按可用处理")
+}
+
+// 上架版本里包里没有的运行时，预设要如实报不可用。
+@Test func presetReportsWhyItCannotRunInThisBuild() throws {
+    let json = """
+    {"items":[{"id":"dotnet","version":"1","title":".NET","kind":"dotnet","default_port":5000,
+               "available":false,
+               "unavailable_reason":"这一版没有内置 dotnet 运行时，装了也跑不起来。"}]}
+    """
+    let preset = try #require(try decode(PresetCatalog.self, json).items.first)
+    #expect(preset.isRunnable == false)
+    #expect(preset.unavailableReason?.isEmpty == false, "不可用时必须有原因给用户看")
+}
+
+// 静态站点永远可用 —— 它由内核直接托管，不需要运行时。
+@Test func staticPresetsAreAlwaysRunnable() throws {
+    let json = """
+    {"items":[{"id":"static","version":"1","title":"静态站点","kind":"","default_port":8080,
+               "available":true}]}
+    """
+    let preset = try #require(try decode(PresetCatalog.self, json).items.first)
+    #expect(preset.isStatic)
+    #expect(preset.isRunnable)
+}

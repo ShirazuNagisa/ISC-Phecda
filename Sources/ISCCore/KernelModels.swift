@@ -41,9 +41,22 @@ public struct PresetInfo: Decodable, Sendable, Identifiable {
     /// 补充说明，已由内核按请求语言本地化。
     public let note: String?
 
+    /// 这一版**跑不跑得起来**。缺省视为可用（旧内核没有这个字段）。
+    ///
+    /// # 为什么它必须在选预设时就拿到
+    ///
+    /// 上架版本把运行时随包内置，而包装不下所有技术栈。没有这个字段的话，
+    /// 用户会选一个跑不了的预设、填完整张表单，直到**部署中途**才失败 ——
+    /// 而错误说的是"这个运行时没被打进包里"，与他在界面上做的事看不出关系。
+    public let available: Bool?
+    /// 跑不起来的原因，已由内核按请求语言本地化。
+    public let unavailableReason: String?
+
     /// 静态站点不需要任何外部运行时。
     public var isStatic: Bool { kind.isEmpty }
     public var needsDocker: Bool { kind == "docker" }
+    /// 这一版能不能跑。旧内核不带这个字段，按可用处理。
+    public var isRunnable: Bool { available ?? true }
 }
 
 public struct PresetCatalog: Decodable, Sendable {

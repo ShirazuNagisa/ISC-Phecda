@@ -71,11 +71,13 @@ struct MenuBarPanelView: View {
                 PanelMetric(title: "CPU",
                             value: cpuValue,
                             fraction: footprint?.cpuFraction,
+                            secondary: nil,
                             note: footprint == nil ? tr("暂无数据", "No data") : nil,
                             tint: .blue)
                 PanelMetric(title: "GPU",
                             value: gpuValue,
                             fraction: gpu?.utilizationPercent.map { min(1, max(0, $0 / 100)) },
+                            secondary: nil,
                             note: gpuNote,
                             tag: tr("整机", "Device"),
                             tint: .orange)
@@ -84,11 +86,13 @@ struct MenuBarPanelView: View {
                 PanelMetric(title: tr("内存", "Memory"),
                             value: footprint?.memoryBytes.formattedBytes ?? "—",
                             fraction: nil,
+                            secondary: nil,
                             note: footprint == nil ? tr("暂无数据", "No data") : nil,
                             tint: .purple)
                 PanelMetric(title: tr("网络", "Network"),
-                            value: netValue,
+                            value: netRxValue,
                             fraction: nil,
+                            secondary: netTxValue,
                             note: netNote,
                             tint: .teal)
             }
@@ -115,20 +119,29 @@ struct MenuBarPanelView: View {
         return nil
     }
 
-    /// 网络也是三态，而且"没读到"必须显示成"未读到"而不是 0 ——
-    /// 0 会让用户以为 Phecda 根本不占网络。
-    private var netValue: String {
+    /// 网络的主数字是**接收**，发送放在它下面那一行。
+    ///
+    /// 这里曾经把发送塞进 `note`，而 `note` 的语义是"这个数现在没有" ——
+    /// 于是它在界面上顶掉了主数字，整格只剩一个"↑ 0 B/s"，接收速率根本
+    /// 没显示出来。`note` 与"第二行"是两件事，不能互相借用。
+    private var netRxValue: String {
         guard let footprint, footprint.hasNetwork, let rx = footprint.netRxBytesPerSec else {
             return "—"
         }
         return rx.formattedRate
     }
 
+    private var netTxValue: String? {
+        guard let footprint, footprint.hasNetwork, let tx = footprint.netTxBytesPerSec else {
+            return nil
+        }
+        return tr("↑ \(tx.formattedRate)", "↑ \(tx.formattedRate)")
+    }
+
+    /// "这个数现在没有"的说明。为 nil 才表示有值。
     private var netNote: String? {
         guard let footprint else { return tr("暂无数据", "No data") }
-        if footprint.hasNetwork, let tx = footprint.netTxBytesPerSec {
-            return tr("↑ \(tx.formattedRate)", "↑ \(tx.formattedRate)")
-        }
+        if footprint.hasNetwork { return nil }
         switch footprint.netBackend {
         case "unsupported": return tr("不支持", "Unsupported")
         case "unavailable": return tr("未读到", "No reading")
@@ -174,10 +187,16 @@ struct MenuBarPanelView: View {
 ///
 /// `note` 非空表示"这个数现在没有"，此时**不显示** value：把"不支持"
 /// 和"0%"并排放在一起，用户只会记住那个 0。
+///
+/// `secondary` 是主数字下面的第二行（网络用它放发送速率）。它与 `note`
+/// 是两件事：`secondary` 是"还有个数"，`note` 是"没有数"。借用后者去装
+/// 前者，那条数值就会顶掉主数字。
 private struct PanelMetric: View {
     let title: String
     let value: String
     let fraction: Double?
+    /// 主数字下面的一行补充（没有就留空占位，保证 2×2 各格等高）。
+    let secondary: String?
     let note: String?
     var tag: String? = nil
     let tint: Color
@@ -203,14 +222,18 @@ private struct PanelMetric: View {
                 .font(.title3.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(note == nil ? .primary : .secondary)
-            if let fraction {
+            if let fraction, note == nil {
                 ProgressView(value: fraction).tint(tint).controlSize(.small)
             } else {
                 // 占位：让有进度条和没进度条的格子一样高，
                 // 否则 2×2 网格会参差不齐。
                 Color.clear.frame(height: 6)
             }
+            Text(note == nil ? (secondary ?? " ") : " ")
+                .font(.caption2).foregroundStyle(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

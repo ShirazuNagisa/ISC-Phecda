@@ -20,9 +20,6 @@ struct SettingsView: View {
     @State private var proxyEnabled = false
     /// 隧道。开关与状态分开存：开关是用户的意图，状态是内核实际做到哪一步，
     /// 两者常常不一致（点了开但缺 cloudflared），而那个差值正是要显示的东西。
-    @State private var tunnelEnabled = false
-    @State private var tunnel: TunnelStatus?
-    @State private var tunnelBusy = false
     @State private var proxyPort = ""
     @State private var proxyTLS = true
     @State private var logLevel = "info"
@@ -163,112 +160,9 @@ struct SettingsView: View {
 
     /// Cloudflare 自动中继。
     ///
-    /// # 为什么它放在反向代理**之后**
-    ///
-    /// 两者是叠加关系而不是二选一：隧道把流量送到本机反代上，所以反代
-    /// 没开时开隧道是没有意义的 —— 隧道会连上边缘，然后每个请求都撞在
-    /// 一个没有监听的端口上。放在后面让这个依赖关系在阅读顺序上就成立。
-    private var tunnelSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle(tr("Cloudflare 自动中继", "Cloudflare relay"),
-                         tr("本机没有公网地址时，让站点仍然能从公网访问。",
-                            "Keeps sites reachable from the internet when this machine has no public address."))
-
-            Toggle(tr("启用", "Enabled"), isOn: tunnelBinding)
-                .toggleStyle(.switch)
-                .disabled(tunnelBusy)
-
-            Text(tr("本机主动向 Cloudflare 建一条长连接，外面来的请求顺着它进来。不需要公网地址，也不用在路由器上开端口 —— 校园网、公司网、大内网宽带都能用。",
-                    "This machine opens a long-lived connection to Cloudflare, and incoming requests travel back along it. No public address and no router port forwarding — works on campus, corporate and carrier-grade NAT networks."))
-                .font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if tunnelEnabled || tunnel != nil {
-                tunnelStatusRow
-            }
-        }
-    }
-
-    /// 隧道状态那一行。
-    ///
-    /// 说"卡在哪一步"而不是只说"未开启"：缺 cloudflared、缺授权、启动失败
-    /// 三种情况要用户做的事完全不同，而它们在一个布尔量里长得一模一样。
-    @ViewBuilder private var tunnelStatusRow: some View {
-        if let tunnel {
-            HStack(spacing: 8) {
-                Circle().fill(tunnel.isRunning ? .green : (tunnel.isBlocked ? .orange : .secondary))
-                    .frame(width: 7, height: 7)
-                Text(tunnelSummary(tunnel)).font(.caption)
-                Spacer(minLength: 0)
-                if tunnel.isRunning {
-                    Text(tr("\(tunnel.connections) 条连接", "\(tunnel.connections) connections"))
-                        .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
-                }
-            }
-            if let reason = tunnelBlockingReason(tunnel) {
-                Text(reason).font(.caption2).foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func tunnelSummary(_ status: TunnelStatus) -> String {
-        switch status.state {
-        case "running": return tr("运行中", "Running")
-        case "starting": return tr("正在连接 Cloudflare…", "Connecting to Cloudflare…")
-        case "disabled": return tr("未开启", "Off")
-        case "no_binary": return tr("未就绪", "Not ready")
-        case "no_account": return tr("需要授权", "Authorization needed")
-        case "failed": return tr("启动失败", "Failed to start")
-        default: return status.state
-        }
-    }
-
-    /// 卡住的原因，以及**下一步该做什么**。
-    private func tunnelBlockingReason(_ status: TunnelStatus) -> String? {
-        switch status.state {
-        case "no_binary":
-            return tr("内核没有找到 cloudflared。装一个（brew install cloudflared）之后重开即可。",
-                      "The kernel could not find cloudflared. Install it (brew install cloudflared) and try again.")
-        case "no_account":
-            return tr("还差一次账号授权：在终端里跑一次 cloudflared tunnel login。",
-                      "One authorization step is missing: run `cloudflared tunnel login` once in a terminal.")
-        case "failed":
-            return status.lastError
-        default:
-            return nil
-        }
-    }
-
-    /// 开关：走专门的端点而不是 PATCH 设置。
-    ///
-    /// 开关与"真的把它跑起来"是同一件事的两半，发两次请求会让中间那一刻的
-    /// 状态没有意义（设置说开着、进程没起来）。
-    private var tunnelBinding: Binding<Bool> {
-        Binding(
-            get: { tunnelEnabled },
-            set: { want in
-                tunnelEnabled = want
-                Task { await applyTunnel(want) }
-            })
-    }
-
-    private func applyTunnel(_ want: Bool) async {
-        tunnelBusy = true
-        defer { tunnelBusy = false }
-        do {
-            let status = want
-                ? try await model.kernel.enableTunnel()
-                : try await model.kernel.disableTunnel()
-            tunnel = status
-            tunnelEnabled = status.enabled
-        } catch {
-            // 失败时把开关拨回去：留着一个"开着但什么都没发生"的开关，
-            // 比明确报错更让人困惑。
-            tunnelEnabled = !want
-            model.errorMessage = error.localizedDescription
-        }
-    }
+    /// 实现抽在 `TunnelControls` 里：首启向导的第三页要用**同一套**状态文案，
+    /// 而那段"缺 cloudflared / 缺授权"的说明是很具体的知识，复制一份必然漂移。
+    private var tunnelSection: some View { TunnelControls(model: model) }
 
     private var advancedSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -281,6 +175,21 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+
+            Divider()
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tr("引导", "Setup")).font(.callout)
+                    Text(tr("重新走一遍首次安装的引导。", "Walk through the first-run setup again."))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(tr("重新运行", "Run again")) {
+                    model.restartOnboarding()
+                    dismiss()
+                }
+                .buttonStyle(.glass).controlSize(.small)
+            }
         }
     }
 
@@ -335,14 +244,8 @@ struct SettingsView: View {
         proxyEnabled = settings.proxyEnabled ?? false
         proxyPort = (settings.proxyPort ?? 0) > 0 ? String(settings.proxyPort!) : ""
         proxyTLS = settings.proxyTls ?? true
-        tunnelEnabled = settings.tunnelEnabled ?? false
         logLevel = settings.logLevel ?? "info"
         loaded = true
-
-        // 隧道状态单独拉一次：它是**内核实际做到哪一步**，而设置里那个
-        // 布尔量只是用户的意图。两者常常不一致（点了开但缺 cloudflared），
-        // 而界面上要显示的正是那个差值。
-        Task { tunnel = try? await model.kernel.tunnelStatus() }
     }
 
     private func save() async {

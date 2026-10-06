@@ -487,3 +487,58 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
     let item = try decode(ReachabilityList.self, #"{"items":[]}"#)
     #expect(item.items.isEmpty)
 }
+
+// MARK: - 网络环境判断（首启向导第三页）
+
+// 契约里 primary_ipv4/ipv6 是**可选**的，内核多数时候并不发；
+// 而"有没有公网地址"必须由 interfaces 里的实际地址判断。
+@Test func ipStatusDecodesInterfacesNotJustThePrimaryFields() throws {
+    let json = """
+    {"interfaces":[{"name":"en1","index":15,"is_up":true,
+                    "ipv4":["10.14.190.170"],"ipv6":["fe80::813:9964:1dde:edf2"]}]}
+    """
+    let status = try decode(IPStatus.self, json)
+    #expect(status.interfaces?.count == 1)
+    #expect(status.interfaces?.first?.name == "en1")
+    #expect(status.interfaces?.first?.isUp == true)
+    // 旧的便捷字段缺席时不能崩 —— 它们本来就不在 required 里。
+    #expect(status.primaryIpv4 == nil)
+    #expect(status.summary == "—")
+}
+
+// 只有私有 IPv4 + 链路本地 → 外面连不进来，建议中继。
+@Test func relayIsSuggestedWhenOnlyPrivateAddressesExist() throws {
+    let campus = """
+    {"interfaces":[{"name":"en1","ipv4":["10.14.190.170"],"ipv6":["fe80::1"]}]}
+    """
+    let status = try decode(IPStatus.self, campus)
+    #expect(status.hasPublicAddress == false)
+    #expect(status.suggestsRelay)
+}
+
+// 有全局 IPv6 → 直连可能走得通，不预选中继。
+@Test func relayIsNotSuggestedWhenAGlobalIPv6Exists() throws {
+    let home = """
+    {"interfaces":[{"name":"en0","ipv4":["192.168.31.92"],
+                    "ipv6":["fe80::1","2409:8a50:6a1:7450:1847:3ee8:1edc:d3c9"]}]}
+    """
+    let status = try decode(IPStatus.self, home)
+    #expect(status.hasPublicAddress)
+    #expect(status.suggestsRelay == false)
+}
+
+// 唯一本地地址（fc00::/7）不能被公网路由，不能被当成公网地址。
+@Test func uniqueLocalIPv6DoesNotCountAsPublic() throws {
+    let json = """
+    {"interfaces":[{"name":"en0","ipv4":["192.168.1.5"],"ipv6":["fd00::1","fe80::1"]}]}
+    """
+    let status = try decode(IPStatus.self, json)
+    #expect(status.hasPublicAddress == false, "fd00::/8 是唯一本地地址")
+}
+
+// 一张网卡都没有时不该建议中继：那说明还没探测出来，而不是"没有公网地址"。
+// 在"还不知道"的时候给一个建议，用户会照着一个没依据的默认值走下去。
+@Test func noInterfacesMeansNoSuggestionRatherThanSuggestRelay() throws {
+    let status = try decode(IPStatus.self, #"{"interfaces":[]}"#)
+    #expect(status.suggestsRelay == false)
+}

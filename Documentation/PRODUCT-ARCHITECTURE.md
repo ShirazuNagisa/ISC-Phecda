@@ -121,6 +121,37 @@ next to Phecda's own CPU figure would be the exact confusion the footprint calib
 remove. The measurement definitions live in ISC-Core (`docs/DECISIONS.md` D39); the GUI only
 renders them.
 
+## First-run setup
+
+The first launch after installation shows a four-page wizard instead of the main window. It
+**replaces** the window content rather than presenting a sheet: two of the four pages ask the
+user to type things, and a sheet's fixed size and rounded corners squeeze those fields into a
+corner while the rest of the window sits empty.
+
+Each page splits left (the Phecda mark) from right (the controls), with Back/Next in the
+bottom-right corner.
+
+| Page | What the user gets out of it |
+|---|---|
+| Welcome | What this is, and whether the kernel is up — every later page depends on it |
+| DNS provider | The first credential; without it nothing else works |
+| Network | The Cloudflare relay, when this machine cannot be reached from outside |
+| First site | An actual published site (skippable) |
+
+Every page has an exit: "Skip setup" sits in the top-right. A wizard that traps someone on
+page three is worse than no wizard — they learn to dislike the product before using it.
+
+Two decisions worth keeping:
+
+- **The relay question is pre-answered from measurement.** Most people cannot say whether
+  their network blocks incoming connections. The kernel cannot test its own inbound
+  reachability (see `internal/verify`), but *whether a public address exists* is knowable, so
+  the wizard proposes an answer and explains how it got there. The user can always override it.
+- **Shared components, not copied ones.** The credential fields and the relay controls are the
+  same views the Settings screen uses. The failure text for "cloudflared missing" versus "account
+  not authorized" is specific knowledge; a second copy of it drifts into telling users two
+  different things about the same problem.
+
 ## Future products
 
 ### ISC Mizar

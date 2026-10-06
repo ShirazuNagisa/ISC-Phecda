@@ -6,6 +6,18 @@ struct RootView: View {
     @Bindable var model: AppModel
 
     var body: some View {
+        // 引导**替换**整个窗口内容，而不是盖一个 sheet。
+        //
+        // 四页里有两页要用户真的填东西，而 sheet 的尺寸与圆角会把那些输入框
+        // 挤在一小块里 —— 旁边就是空着的窗口。
+        if model.showOnboarding {
+            OnboardingView(model: model)
+        } else {
+            main
+        }
+    }
+
+    private var main: some View {
         NavigationSplitView {
             sidebar
         } detail: {
@@ -15,9 +27,6 @@ struct RootView: View {
         .overlay(alignment: .bottom) { banner }
         .sheet(isPresented: $model.showingNewService) {
             NewServiceView(model: model)
-        }
-        .sheet(isPresented: $model.showOnboarding) {
-            FirstRunView(model: model)
         }
         .sheet(item: $model.requestedSheet) { sheet in
             switch sheet {

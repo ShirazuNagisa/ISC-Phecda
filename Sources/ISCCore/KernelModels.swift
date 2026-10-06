@@ -381,11 +381,64 @@ public struct IPStatus: Decodable, Sendable {
     public let primaryIpv4: String?
     public let primaryIpv6: String?
     public let primaryPrefix: String?
+    /// 参与解析的网卡（已排除回环与虚拟网卡）。
+    ///
+    /// # 为什么客户端要解它，而不是只用上面那三个便捷字段
+    ///
+    /// 那三个字段是**可选**的（契约里不在 required 里），内核在多数情况下
+    /// 并不发。而"这台机器有没有公网地址"必须由 `interfaces` 里的实际地址
+    /// 判断 —— 首启向导的第三页靠它给用户预选"要不要 Cloudflare 中继"，
+    /// 而多数用户答不出"我这算不算需要中继的网络"。
+    public let interfaces: [InterfaceAddrs]?
 
     public var summary: String {
         let values = [primaryIpv4, primaryIpv6].compactMap { $0 }.filter { !$0.isEmpty }
         return values.isEmpty ? "—" : values.joined(separator: " · ")
     }
+
+    /// 这台机器有没有**可被公网路由到**的地址。
+    ///
+    /// 只看全局 IPv6：家用/校园网里即便有 IPv4 也几乎都在 NAT 后面，
+    /// 而一个私有 IPv4 恰恰是"外面连不进来"的典型信号。
+    public var hasPublicAddress: Bool {
+        for interface in interfaces ?? [] {
+            for address in interface.ipv6 ?? [] {
+                let lower = address.lowercased()
+                // 链路本地、唯一本地（fc00::/7）都不能被公网路由。
+                if lower.hasPrefix("fe80:") || lower.hasPrefix("fc") || lower.hasPrefix("fd") {
+                    continue
+                }
+                if !lower.isEmpty { return true }
+            }
+        }
+        return false
+    }
+
+    /// 是否建议开启 Cloudflare 中继。
+    ///
+    /// 这是一个**提示**而不是结论：内核测不了自己的入站可达性（见 Core 的
+    /// internal/verify），但有公网地址是它的必要条件。没有公网 IPv6 时
+    /// 绝大多数情况下直连走不通，因此默认建议中继 —— 用户始终可以改。
+    public var suggestsRelay: Bool {
+        guard let interfaces, !interfaces.isEmpty else { return false }
+        return !hasPublicAddress
+    }
+}
+
+/// 一张网卡上的地址。
+public struct InterfaceAddrs: Decodable, Sendable {
+    public let name: String
+    public let index: Int?
+    public let isUp: Bool?
+    /// 全部 IPv6 地址（含链路本地，供排查用）。
+    public let ipv6: [String]?
+    public let ipv4: [String]?
+
+    // 刻意**不写** CodingKeys。
+    //
+    // 解码器开着 convertFromSnakeCase：它先把 JSON 的 `is_up` 转成 `isUp`
+    // 再和键比对，因此手写 `case isUp = "is_up"` 反而永远匹配不上 ——
+    // 症状是这个字段静默为 nil，而不是解码报错。
 }
 
 /// 一个 DNS 解析条目。

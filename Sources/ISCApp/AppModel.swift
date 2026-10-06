@@ -282,6 +282,16 @@ enum AppSection: String, CaseIterable, Identifiable {
         showOnboarding = apps.isEmpty && credentials.isEmpty
     }
 
+    /// 让首次引导重新出现。
+    ///
+    /// 存在的理由不只是"用户想再看一遍"：**没有它就没法重测这个界面**。
+    /// 标记落在 UserDefaults 里，重测要先手动去删那个 key —— 而那一步
+    /// 在真机上和在开发机上一样别扭。
+    func restartOnboarding() {
+        UserDefaults.standard.removeObject(forKey: Self.onboardingKey)
+        showOnboarding = true
+    }
+
     /// 用户关掉了首次引导：记住这件事。
     func dismissOnboarding() {
         UserDefaults.standard.set(true, forKey: Self.onboardingKey)

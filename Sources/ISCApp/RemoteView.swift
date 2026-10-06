@@ -86,7 +86,21 @@ struct RemoteView: View {
     // MARK: - 说明
 
     private var intro: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // 强调用手写的三段拼接，而不是字符串里的 `**`：`Text` 只在
+        // **字面量**上解析 Markdown，而 `tr(zh, en)` 返回的是运行时
+        // 字符串 —— 那时 `**` 会原样显示在界面上。
+        //
+        // 拼接用插值而不是 `Text + Text`：后者从 macOS 26 起被弃用，
+        // 而 `\(Text(...).bold())` 仍然保留中间那段的加粗。
+        //
+        // 三段先落到常量里，是因为插值表达式不能跨行 —— 直接写在
+        // 字符串里的话，那段换行的长文案会把字面量截断。
+        let lead = tr("这是一条", "This is a ")
+        let strong = tr("独立的监听与认证链", "separate listener with its own auth chain")
+        let tail = tr("：自签证书、按设备签发的令牌，与本地管理通道互不影响。本地令牌永远不会离开这台机器。",
+                      ": a self-signed certificate and per-device tokens. It does not touch the local management channel, and the local token never leaves this machine.")
+
+        return VStack(alignment: .leading, spacing: 6) {
             Text(tr("远程访问", "Remote Access"))
                 .font(.title2.weight(.semibold))
             Text(tr("让 iPhone、iPad 与 Apple Watch 上的 ISC Mizar 在同局域网内查看这台机器的服务状态与资源占用，并远程改动 DNS 解析。",
@@ -94,13 +108,7 @@ struct RemoteView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            // 强调用手写的三段拼接，而不是字符串里的 `**`：`Text` 只在
-            // **字面量**上解析 Markdown，而 `tr(zh, en)` 返回的是运行时
-            // 字符串 —— 那时 `**` 会原样显示在界面上。
-            (Text(tr("这是一条", "This is a "))
-             + Text(tr("独立的监听与认证链", "separate listener with its own auth chain")).bold()
-             + Text(tr("：自签证书、按设备签发的令牌，与本地管理通道互不影响。本地令牌永远不会离开这台机器。",
-                       ": a self-signed certificate and per-device tokens. It does not touch the local management channel, and the local token never leaves this machine.")))
+            Text("\(Text(lead))\(Text(strong).bold())\(Text(tail))")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)

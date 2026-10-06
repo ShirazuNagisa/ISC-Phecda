@@ -86,8 +86,8 @@ struct StatePill: View {
 
 /// 首页上的一张指标卡。
 ///
-/// 三张卡必须**一样高**。此前网络那张少一行（CPU 与内存有占比条、网络没有），
-/// 于是它比另外两张矮一截 —— 并排的三张卡参差不齐，看起来像是网络那张
+/// 几张卡必须**一样高**。此前网络那张少一行（CPU 与内存有占比条、网络没有），
+/// 于是它比另外两张矮一截 —— 并排的卡参差不齐，看起来像是网络那张
 /// 出了问题。修法不是给它硬塞一个没有意义的占比条，而是让第三行**两种形态
 /// 高度一致**：有占比就画条，没有就放一行说明。
 struct MetricCard: View {
@@ -107,6 +107,14 @@ struct MetricCard: View {
     let caption: String?
     let symbol: String
     let tint: Color
+    /// 非空表示"这个数现在没有"，此时**不显示** value 与 detail，只显示它。
+    ///
+    /// # 为什么不能用"0"或"—"顶替
+    ///
+    /// 指标有若干种"没有值"，而它们要说的话完全不同：平台不支持、这次
+    /// 没读到、这台机器没有这个设备。统一显示成 0 会被读成"什么都没占用"，
+    /// 显示成"—"则是让用户自己去猜是哪种。因此由调用方给一句明确的话。
+    var note: String? = nil
 
     /// 第三行的固定高度。
     ///
@@ -120,15 +128,21 @@ struct MetricCard: View {
                 Image(systemName: symbol).foregroundStyle(tint)
                 Text(title).font(.caption).foregroundStyle(.secondary)
             }
-            Text(value).font(.title2.weight(.semibold)).monospacedDigit().lineLimit(1)
+            Text(note ?? value)
+                .font(.title2.weight(.semibold)).monospacedDigit().lineLimit(1)
                 .minimumScaleFactor(0.6)
+                .foregroundStyle(note == nil ? .primary : .secondary)
             Group {
-                switch detail {
-                case .fraction(let fraction):
-                    ProgressView(value: min(max(fraction, 0), 1)).tint(tint)
-                case .text(let text):
-                    Text(text).font(.caption2).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
+                if note != nil {
+                    Color.clear
+                } else {
+                    switch detail {
+                    case .fraction(let fraction):
+                        ProgressView(value: min(max(fraction, 0), 1)).tint(tint)
+                    case .text(let text):
+                        Text(text).font(.caption2).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
                 }
             }
             .frame(height: detailHeight)

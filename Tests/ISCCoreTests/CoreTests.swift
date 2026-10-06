@@ -366,3 +366,79 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
     #expect(try provider("not a url").credentialPageURL == nil)
     #expect(try provider("https://example.com/keys").credentialPageURL != nil)
 }
+
+// MARK: - footprint（v0.4.1）
+
+@Test func footprintDecodingDistinguishesTheThreeNetworkStates() throws {
+    // 有速率：两个字段都在。
+    let live = """
+    {"host":{"cpu_percent":10,"memory_used_bytes":1,"memory_total_bytes":2,
+             "net_rx_bytes_per_sec":3,"net_tx_bytes_per_sec":4,"backend":"darwin"},
+     "footprint":{"cpu_percent":180,"memory_bytes":4096,"net_rx_bytes_per_sec":1024,
+                  "net_tx_bytes_per_sec":512,"net_backend":"darwin-nettop","processes":3},
+     "apps":[]}
+    """
+    let snapshot = try decode(MetricsSnapshot.self, live)
+    let footprint = try #require(snapshot.footprint)
+    #expect(footprint.hasNetwork)
+    #expect(footprint.netRxBytesPerSec == 1024)
+    #expect(footprint.netBackend == "darwin-nettop")
+    #expect(footprint.processes == 3)
+    // 多核机器上 CPU 之和会超过 100：进度条必须钳住，否则画到框外。
+    #expect(footprint.cpuFraction == 1.0)
+}
+
+@Test func footprintDecodingTreatsUnsupportedNetworkAsUnreadNotZero() throws {
+    // 平台不支持 / 这次没读到：两个速率字段**缺省**。
+    // 界面据此显示"不支持"/"未读到"，而不是一个会被读成"不占网络"的 0。
+    let json = """
+    {"host":{"cpu_percent":1,"memory_used_bytes":1,"memory_total_bytes":2,
+             "net_rx_bytes_per_sec":0,"net_tx_bytes_per_sec":0,"backend":"linux-procfs"},
+     "footprint":{"cpu_percent":0,"memory_bytes":0,"net_backend":"unsupported","processes":1},
+     "apps":[]}
+    """
+    let snapshot = try decode(MetricsSnapshot.self, json)
+    let footprint = try #require(snapshot.footprint)
+    #expect(footprint.hasNetwork == false)
+    #expect(footprint.netRxBytesPerSec == nil)
+    #expect(footprint.netBackend == "unsupported")
+}
+
+@Test func metricsSnapshotWithoutFootprintStillDecodes() throws {
+    // 旧内核（0.4.0）不发 footprint，界面必须还能解析 —— 否则升级内核之前
+    // 首页会整块空白。
+    let json = """
+    {"host":{"cpu_percent":1,"memory_used_bytes":1,"memory_total_bytes":2,
+             "net_rx_bytes_per_sec":0,"net_tx_bytes_per_sec":0,"backend":"darwin"},
+     "apps":[]}
+    """
+    let snapshot = try decode(MetricsSnapshot.self, json)
+    #expect(snapshot.footprint == nil)
+}
+
+@Test func gpuMetricsDistinguishesAbsentFromUnread() throws {
+    // 三种状态各自可辨：没有 gpu 字段 / backend=unsupported / 有 backend 没数值。
+    let none = """
+    {"host":{"cpu_percent":1,"memory_used_bytes":1,"memory_total_bytes":2,
+             "net_rx_bytes_per_sec":0,"net_tx_bytes_per_sec":0,"backend":"darwin"},"apps":[]}
+    """
+    #expect(try decode(MetricsSnapshot.self, none).host.gpu == nil)
+
+    let unsupported = """
+    {"host":{"cpu_percent":1,"memory_used_bytes":1,"memory_total_bytes":2,
+             "net_rx_bytes_per_sec":0,"net_tx_bytes_per_sec":0,"backend":"darwin",
+             "gpu":{"backend":"unsupported"}},"apps":[]}
+    """
+    let gpu = try #require(try decode(MetricsSnapshot.self, unsupported).host.gpu)
+    #expect(gpu.isSupported == false)
+
+    let unread = """
+    {"host":{"cpu_percent":1,"memory_used_bytes":1,"memory_total_bytes":2,
+             "net_rx_bytes_per_sec":0,"net_tx_bytes_per_sec":0,"backend":"darwin",
+             "gpu":{"backend":"darwin-ioreg","name":"Apple M4"}},"apps":[]}
+    """
+    let reading = try #require(try decode(MetricsSnapshot.self, unread).host.gpu)
+    #expect(reading.isSupported)
+    #expect(reading.utilizationPercent == nil)
+    #expect(reading.name == "Apple M4")
+}

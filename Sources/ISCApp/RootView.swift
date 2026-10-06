@@ -227,31 +227,104 @@ struct HomeView: View {
         }
     }
 
+    /// 硬件信息栏。
+    ///
+    /// # 口径
+    ///
+    /// CPU / 内存 / 网络 是 **Phecda 自己的占用**（内核 + 站点进程树），
+    /// 不是整台机器 —— 用户看到"CPU 60%"时的第一反应是"Phecda 吃了这么多"，
+    /// 所以主数字就该是它的。整机数字留在 caption 里当对照：机器卡的时候
+    /// 用户真正要做的比较是"是它干的，还是别的程序"。
+    ///
+    /// GPU 是唯一的例外，而且是**不得不**的：macOS 没有按进程归因 GPU 的
+    /// 途径，只能拿设备级利用率。因此它带一个"整机 GPU"的标注 ——
+    /// 两种口径并排摆着而不说明，比不显示更糟。
+    ///
+    /// # 换行
+    ///
+    /// 用自适应网格而不是 HStack：四张卡在窄窗口里排不下时**自动换行**，
+    /// 而不是把每张挤到读不出数字（窗口最小宽度是 900）。
     @ViewBuilder private var metricsSection: some View {
         if let host = model.metrics?.host, host.isSupported {
-            // alignment: .top 让三张卡从同一条基线开始排；等高由 MetricCard
-            // 内部固定的第三行高度保证。
-            HStack(alignment: .top, spacing: 14) {
-                MetricCard(title: tr("CPU", "CPU"),
-                           value: host.cpuPercent.formattedPercent,
-                           detail: .fraction(host.cpuPercent / 100),
-                           caption: tr("整机占用", "whole machine"),
-                           symbol: "cpu", tint: .blue)
-                MetricCard(title: tr("内存", "Memory"),
-                           value: host.memoryUsedBytes.formattedBytes,
-                           detail: .fraction(host.memoryFraction),
-                           caption: tr("共 \(host.memoryTotalBytes.formattedBytes)", "of \(host.memoryTotalBytes.formattedBytes)"),
-                           symbol: "memorychip", tint: .purple)
-                MetricCard(title: tr("网络", "Network"),
-                           value: host.netRxBytesPerSec.formattedRate,
-                           detail: .text(tr("↑ \(host.netTxBytesPerSec.formattedRate)",
-                                            "↑ \(host.netTxBytesPerSec.formattedRate)")),
-                           caption: tr("接收 / 发送", "down / up"),
-                           symbol: "arrow.up.arrow.down", tint: .teal)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 14)],
+                      alignment: .leading, spacing: 14) {
+                cpuCard(host)
+                gpuCard(host)
+                memoryCard(host)
+                networkCard(host)
             }
         } else {
             Text(tr("此平台暂不支持资源指标。", "Resource metrics are not available on this platform."))
                 .font(.callout).foregroundStyle(.secondary)
+        }
+    }
+
+    /// footprint 缺席只可能发生在旧内核上（新内核一定会发）。
+    private var footprint: FootprintMetrics? { model.metrics?.footprint }
+
+    private func cpuCard(_ host: HostMetrics) -> some View {
+        MetricCard(title: tr("CPU", "CPU"),
+                   value: footprint.map { $0.cpuPercent.formattedPercent } ?? "—",
+                   detail: .fraction(footprint?.cpuFraction ?? 0),
+                   caption: tr("Phecda 占用 · 整机 \(host.cpuPercent.formattedPercent)",
+                               "Phecda · device \(host.cpuPercent.formattedPercent)"),
+                   symbol: "cpu", tint: .blue,
+                   note: footprint == nil ? tr("需要更新内核", "Kernel update needed") : nil)
+    }
+
+    private func gpuCard(_ host: HostMetrics) -> some View {
+        MetricCard(title: "GPU",
+                   value: host.gpu?.utilizationPercent.map(\.formattedPercent) ?? "—",
+                   detail: .fraction((host.gpu?.utilizationPercent ?? 0) / 100),
+                   caption: tr("整机 GPU\(host.gpu?.name.map { " · \($0)" } ?? "")",
+                               "Device GPU\(host.gpu?.name.map { " · \($0)" } ?? "")"),
+                   symbol: "cube.transparent", tint: .orange,
+                   note: gpuNote(host))
+    }
+
+    private func gpuNote(_ host: HostMetrics) -> String? {
+        guard let gpu = host.gpu else { return tr("这台机器没有可采样的 GPU", "No samplable GPU") }
+        if !gpu.isSupported { return tr("此平台不支持", "Not supported here") }
+        if gpu.utilizationPercent == nil { return tr("本次未读到", "No reading this time") }
+        return nil
+    }
+
+    private func memoryCard(_ host: HostMetrics) -> some View {
+        MetricCard(title: tr("内存", "Memory"),
+                   value: footprint?.memoryBytes.formattedBytes ?? "—",
+                   detail: .text(tr("共 \(host.memoryTotalBytes.formattedBytes)",
+                                    "of \(host.memoryTotalBytes.formattedBytes)")),
+                   caption: tr("Phecda 占用 · 整机 \(host.memoryUsedBytes.formattedBytes)",
+                               "Phecda · device \(host.memoryUsedBytes.formattedBytes)"),
+                   symbol: "memorychip", tint: .purple,
+                   note: footprint == nil ? tr("需要更新内核", "Kernel update needed") : nil)
+    }
+
+    private func networkCard(_ host: HostMetrics) -> some View {
+        // 网络是三态的：没读到要显示"未读到"而不是 0 —— 否则用户会以为
+        // Phecda 不占网络。整机速率留在 caption 里当对照。
+        let fp = footprint
+        let value = (fp?.hasNetwork == true ? fp?.netRxBytesPerSec : nil)?.formattedRate ?? "—"
+        let detail: MetricCard.Detail = fp?.hasNetwork == true
+            ? .text(tr("↑ \((fp?.netTxBytesPerSec ?? 0).formattedRate)",
+                       "↑ \((fp?.netTxBytesPerSec ?? 0).formattedRate)"))
+            : .text(tr("Phecda 流量", "Phecda traffic"))
+        return MetricCard(title: tr("网络", "Network"),
+                          value: value,
+                          detail: detail,
+                          caption: tr("整机 ↓ \(host.netRxBytesPerSec.formattedRate) · ↑ \(host.netTxBytesPerSec.formattedRate)",
+                                      "Device ↓ \(host.netRxBytesPerSec.formattedRate) · ↑ \(host.netTxBytesPerSec.formattedRate)"),
+                          symbol: "arrow.up.arrow.down", tint: .teal,
+                          note: networkNote)
+    }
+
+    private var networkNote: String? {
+        guard let fp = footprint else { return tr("需要更新内核", "Kernel update needed") }
+        if fp.hasNetwork { return nil }
+        switch fp.netBackend {
+        case "unsupported": return tr("此平台不支持按进程统计", "Per-process traffic not supported here")
+        case "unavailable": return tr("本次未读到", "No reading this time")
+        default: return tr("暂无数据", "No data")
         }
     }
 

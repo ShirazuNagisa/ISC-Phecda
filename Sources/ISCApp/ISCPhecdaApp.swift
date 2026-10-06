@@ -11,10 +11,29 @@ import ISCCore
 ///
 /// 不用 WindowGroup：那样关掉窗口就等于退出，而内嵌内核应该继续跑着 ——
 /// 用户的站点还在上面。窗口由 AppKit 持有，关闭它只是关掉界面。
-final class AppDelegate: NSObject, NSApplicationDelegate {
+///
+/// # 菜单栏点击弹面板，不是开窗口
+///
+/// 早先图标绑的是 `openWindow`，于是**点一次开一个**，窗口越堆越多。
+/// 现在点图标弹一个 transient 面板（简略信息台），主窗口只能从面板里
+/// 打开，且全局只有一个实例 —— 重复打开是把它前置，不是再开一个。
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let model = AppModel()
     private var statusItem: NSStatusItem?
-    private var windows: [NSWindow] = []
+    private var popover: NSPopover?
+
+    /// 主窗口。单例：重复打开只前置，不新建。
+    private var mainWindow: NSWindow?
+
+    /// 上一次面板因"点到外面"而关闭的时刻。
+    ///
+    /// # 为什么需要它
+    ///
+    /// `.transient` 面板在点击状态栏图标时会先被系统判为"点到了外部"而
+    /// 关闭，紧接着按钮的 action 又把它打开 —— 表现是图标**点不灭**：
+    /// 刚关掉又弹出来。记下关闭时刻，让紧随其后的那次点击只当"关闭"。
+    private var popoverClosedAt: Date?
+
     private var mayTerminate = false
     private var quitting = false
 
@@ -23,11 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = Self.menuBarImage()
         item.button?.target = self
-        item.button?.action = #selector(openWindow)
+        item.button?.action = #selector(togglePopover)
         item.button?.toolTip = "ISC Phecda"
         statusItem = item
         Task { await model.start() }
-        DispatchQueue.main.async { [weak self] in self?.openWindow() }
+        // 刻意**不**在这里开主窗口：菜单栏常驻应用一启动就弹窗是很打扰的，
+        // 而且内核在后台跑着并不需要用户看着。用户点图标就能看到状态。
     }
 
     /// 菜单栏图标。
@@ -50,7 +70,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
-    @objc func openWindow() {
+    /// 点击菜单栏图标：开或关那个简略信息台。
+    @objc func togglePopover() {
+        guard let button = statusItem?.button else { return }
+        if let popover, popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        // 刚刚才因为"点到外面"关掉的那一次点击，只当作关闭 ——
+        // 否则面板会关掉又立刻弹回来，看起来像点不灭。
+        if let closedAt = popoverClosedAt, Date().timeIntervalSince(closedAt) < 0.2 {
+            popoverClosedAt = nil
+            return
+        }
+
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(
+            rootView: MenuBarPanelView(
+                model: model,
+                openMainWindow: { [weak self] in
+                    self?.popover?.performClose(nil)
+                    self?.openMainWindow()
+                },
+                quit: { NSApp.terminate(nil) }
+            )
+        )
+        popover.delegate = self
+        self.popover = popover
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// 记下关闭时刻，供 togglePopover 识别"这一下点击只是关掉面板"。
+    func popoverDidClose(_ notification: Notification) {
+        popoverClosedAt = Date()
+        popover = nil
+    }
+
+    /// 打开主窗口。已经有一个就把它前置，**不新建**。
+    ///
+    /// 这一条就是"不许多开窗口"的全部实现：窗口由自己持有，而不是每次
+    /// 点击都造一个新的。早先每次 new 一个 NSWindow，用户点几次就有几个。
+    @objc func openMainWindow() {
+        if let mainWindow {
+            mainWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1080, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -58,12 +125,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "ISC Phecda"
         window.minSize = NSSize(width: 900, height: 580)
         window.titlebarAppearsTransparent = true
+        // 关掉窗口不等于销毁它：内核还在跑，用户再打开时应当看到同一个
+        // 界面（连同滚动位置与选中项），而不是一个刚初始化的新窗口。
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: RootView(model: model))
         window.center()
         window.makeKeyAndOrderFront(nil)
-        windows.removeAll { !$0.isVisible }
-        windows.append(window)
+        mainWindow = window
         NSApp.activate(ignoringOtherApps: true)
     }
 

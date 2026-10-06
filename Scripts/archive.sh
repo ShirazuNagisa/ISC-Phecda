@@ -33,6 +33,33 @@ EXPORT="${ISC_EXPORT_PATH:-$ROOT/Build/export}"
 #   php python java dotnet       ≈ 1.0 GB
 export ISC_BUNDLED_RUNTIMES="${ISC_BUNDLED_RUNTIMES:-php python}"
 
+# 先用 appstore 标签重建内核库并换进 Vendor/。
+#
+# **这一步不能省。** 内核库是预编译进仓库的（Vendor/ISC），而它的默认构建
+# **带下载器** —— App Review 2.5.2 禁止应用下载并执行代码，所以上架那份必须
+# 用 appstore 标签重编：那个标签会把取回逻辑整个文件排除在编译之外。
+#
+# 不做的后果很隐蔽：本地一切都正常（包里也确实内置了运行时），而审核看到
+# 的那份二进制里仍然有"按需下载"的能力。构建标签做了等于白做。
+if [ -n "${ISC_CORE_DIR:-}" ] || [ -d "$ROOT/../ISC-Core" ]; then
+  CORE_DIR="${ISC_CORE_DIR:-$ROOT/../ISC-Core}"
+  echo "→ 用 appstore 标签重建内核库"
+  ( cd "$CORE_DIR" && ISC_BUILD_TAGS=appstore ./scripts/build-libisc.sh )
+  for f in libisc.dylib libisc.h SHA256SUMS; do
+    cp "$CORE_DIR/dist/$f" "$ROOT/Vendor/ISC/$f"
+  done
+  "$ROOT/Scripts/verify-vendor.sh"
+  # 反查一次：那份库里不该再有下载器独有的错误串。
+  if strings "$ROOT/Vendor/ISC/libisc.dylib" | grep -q "artifact request failed"; then
+    echo "❌ 内核库里仍然有下载器 —— appstore 标签没生效，先别归档" >&2
+    exit 1
+  fi
+  echo "  ✅ 内核库已确认不含下载器"
+else
+  echo "⚠️  找不到 ISC-Core（$ROOT/../ISC-Core），跳过内核库重建。"
+  echo "   **归档出来的包会带着能下载的内核**，不要拿去上架。" >&2
+fi
+
 echo "→ 内置运行时：$ISC_BUNDLED_RUNTIMES"
 if [ -n "${DEVELOPMENT_TEAM:-}" ]; then
   echo "→ 团队：$DEVELOPMENT_TEAM"

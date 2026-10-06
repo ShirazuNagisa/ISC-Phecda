@@ -269,6 +269,43 @@ DEVELOPMENT_TEAM=<你的团队 ID> Scripts/archive.sh
 CodeSign 之前 —— 所以运行时已经在包内、也被签名覆盖了。这正是它必须在
 那里的原因：签名不覆盖之后才放进包里的文件。
 
+#### 归档已完成并核对（2026-10-06）
+
+拿到 Apple Distribution 证书后跑通了归档。**产物逐项核对过**：
+
+| 检查 | 结果 |
+|---|---|
+| 应用签名团队 | `5Q2A46685M`（付费团队） |
+| 内置内核库团队 | `5Q2A46685M` —— **同团队**，库验证过得去 |
+| entitlements | 6 条（Release 正确去掉了 `get-task-allow`） |
+| 内核里的下载器 | **0 条**（`appstore` 标签一路生效到归档） |
+| 内置运行时 | php 15,106,458 + python 25,365,830 |
+
+**还差导出成 .pkg**，需要另外两样（见下）。
+
+#### 途中修的一个真 bug：`CODE_SIGN_IDENTITY = "-"` 会压掉分发签名
+
+工程里为了本地能跑写了 `CODE_SIGN_IDENTITY = "-"`（强制 ad-hoc），而它对
+Release 同样生效 —— 于是归档是 ad-hoc 签的（`TeamIdentifier=not set`），
+导出阶段报 `No Team Found in Archive`。
+
+**那个报错出现在归档成功之后**，看起来像导出坏了，而根因在两行之外。
+
+现在：Debug 保留 ad-hoc（本机不一定有该团队的开发证书，日常构建不该因为
+签名缺失跑不起来），Release **不写**，由自动签名挑 Apple Distribution。
+
+代价要说清楚：**Debug 构建的沙箱不生效**（ad-hoc 没有 Team ID），所以本机
+测不到沙箱行为。要看沙箱得用 Release 或真机安装。
+
+#### 还需要什么才能导出
+
+    error: exportArchive No signing certificate "Mac Installer Distribution" found
+    error: exportArchive No profiles for 'app.isc.phecda' were found
+
+- **Mac Installer Distribution** 证书 —— 签 .pkg 用，与签应用的 Apple
+  Distribution 是两张不同的证书；
+- `app.isc.phecda` 的 **provisioning profile**。
+
 #### 管道已实测（只差证书）
 
 在**还没有分发证书**的情况下跑了一遍 `Scripts/archive.sh`，它一路走到了导出：

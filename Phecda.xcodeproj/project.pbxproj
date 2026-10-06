@@ -295,6 +295,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
+				// Debug 用 ad-hoc：本机不一定有该团队的开发证书，而日常构建
+				// 不该因为签名缺失而跑不起来。代价是**沙箱不生效**（ad-hoc 没有
+				// Team ID），所以本机测不到沙箱行为 —— 这一条写在
+				// Documentation/APPSTORE.md 里。
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				// 显式写团队，不让 Xcode 猜。
@@ -338,7 +342,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
-				CODE_SIGN_IDENTITY = "-";
+				// Release **刻意不写 CODE_SIGN_IDENTITY**。
+				//
+				// 写了 "-" 就是强制 ad-hoc，而 ad-hoc 签出来的归档里没有团队
+				// （TeamIdentifier=not set），导出阶段会报 "No Team Found in
+				// Archive" —— 那个报错出现在归档**成功之后**，看起来像导出坏了。
+				//
+				// 留空则由自动签名按配置挑：Release 挑 Apple Distribution。
 				CODE_SIGN_STYLE = Automatic;
 				// 显式写团队，不让 Xcode 猜。
 				//

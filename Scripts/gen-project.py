@@ -309,6 +309,10 @@ def main() -> int:
 \t\t\tbuildSettings = {{
 \t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
+\t\t\t\t// Debug 用 ad-hoc：本机不一定有该团队的开发证书，而日常构建
+\t\t\t\t// 不该因为签名缺失而跑不起来。代价是**沙箱不生效**（ad-hoc 没有
+\t\t\t\t// Team ID），所以本机测不到沙箱行为 —— 这一条写在
+\t\t\t\t// Documentation/APPSTORE.md 里。
 \t\t\t\tCODE_SIGN_IDENTITY = "-";
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
 \t\t\t\t// 显式写团队，不让 Xcode 猜。
@@ -352,7 +356,13 @@ def main() -> int:
 \t\t\tbuildSettings = {{
 \t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
-\t\t\t\tCODE_SIGN_IDENTITY = "-";
+\t\t\t\t// Release **刻意不写 CODE_SIGN_IDENTITY**。
+\t\t\t\t//
+\t\t\t\t// 写了 "-" 就是强制 ad-hoc，而 ad-hoc 签出来的归档里没有团队
+\t\t\t\t// （TeamIdentifier=not set），导出阶段会报 "No Team Found in
+\t\t\t\t// Archive" —— 那个报错出现在归档**成功之后**，看起来像导出坏了。
+\t\t\t\t//
+\t\t\t\t// 留空则由自动签名按配置挑：Release 挑 Apple Distribution。
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
 \t\t\t\t// 显式写团队，不让 Xcode 猜。
 \t\t\t\t//

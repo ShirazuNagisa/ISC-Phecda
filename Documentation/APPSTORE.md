@@ -186,6 +186,32 @@ rpath 引用，那条路在签名分发下走不通。
 
 ### 阶段 3 · 内置运行时
 
+**机制已就位**（Core，`internal/runtime`）：
+
+- `UseBundle(dir)` —— 声明内置运行时的位置，Provision **包内优先**；
+- `SetDownloader(nil)` —— 这份构建**没有下载能力**，内置缺失时返回
+  `ErrNotBundled` 而不是悄悄去下载。
+
+接缝很干净：Provision 从取回归档之后，整条链路（校验 → 解压 → 落位）本来
+就只作用在一个本地路径上，所以只加了分支，后面一行没动。**包内那份照样过
+摘要校验** —— "它在包里"不是跳过校验的理由。
+
+**再分发许可已核查**：内置意味着要随应用分发这些运行时，来源逐个看过：
+
+| 运行时 | 来源 | 许可 |
+|---|---|---|
+| Java | `github.com/adoptium/temurin21-binaries`（`OpenJDK21U-jdk_…`） | **OpenJDK（Temurin）**，GPLv2+CE ✅ |
+| .NET | `builds.dotnet.microsoft.com` | MIT ✅ |
+| PHP | `dl.static-php.dev` | static-php-cli，MIT ✅ |
+| Node | `nodejs.org` | MIT ✅ |
+| Go | `go.dev` | BSD-3 ✅ |
+
+计划里那条"确认 Java 是 OpenJDK 构建"**已经满足**，不需要换来源。
+
+**尚未做**：真正把下载代码从 App Store 那份二进制里去掉（构建标签），以及
+在宿主侧接上 `UseBundle`。前者取决于上架版本的构建方式，后者取决于内置哪
+几个运行时 —— 两者都还没定。
+
 - 复用 `internal/artifacts` 的校验机制，但把"下载"换成"从 bundle 复制"。
 - 删掉下载代码路径（不是禁用）。
 - 确认 Java 是 OpenJDK 构建。

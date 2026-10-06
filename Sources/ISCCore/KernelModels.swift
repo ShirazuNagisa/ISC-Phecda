@@ -855,3 +855,38 @@ public struct TunnelStatus: Decodable, Sendable {
         state == "no_binary" || state == "no_account" || state == "failed"
     }
 }
+
+
+// MARK: - 公网可达性
+
+/// 一个域名最近一次的公网可达性检查结果。
+public struct ReachabilityItem: Decodable, Sendable, Identifiable {
+    public let appId: String
+    public let name: String
+    public let domain: String
+    public let ok: Bool
+    public let statusCode: Int?
+    public let latencyMs: Int?
+    public let checkedAt: Date?
+    public let error: String?
+    /// 这次检查是否真的走了公网路径。
+    ///
+    /// 隧道模式下为真 —— 请求会出机器、到 Cloudflare 边缘、再顺着隧道
+    /// 回来，途经的每一段都是公网用户会经过的。没有隧道时走 NAT 发夹，
+    /// 运营商放不放行都会"成功"，因此**不能**当成公网可达的证据。
+    public let trustworthy: Bool
+    /// 连续失败次数。单次失败通常只是网络抖动。
+    public let consecutiveFailures: Int
+
+    public var id: String { domain }
+
+    /// 是否值得当成"坏了"来显示。
+    ///
+    /// 单次失败不报：网络抖动、Cloudflare 边缘切换都会造成一次失败，
+    /// 每次都标红会让用户很快学会忽略这个提示 —— 那比不提示更糟。
+    public var isFailing: Bool { !ok && consecutiveFailures >= 2 }
+}
+
+public struct ReachabilityList: Decodable, Sendable {
+    public let items: [ReachabilityItem]
+}

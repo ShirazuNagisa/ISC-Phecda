@@ -442,3 +442,48 @@ private func encodedObject<T: Encodable>(_ value: T) throws -> [String: Any] {
     #expect(reading.utilizationPercent == nil)
     #expect(reading.name == "Apple M4")
 }
+
+// MARK: - 公网可达性（v0.4.1）
+
+@Test func reachabilityDistinguishesTrustworthyFromHairpin() throws {
+    // 隧道模式下这次检查是真走公网路径的。
+    let tunneled = """
+    {"items":[{"app_id":"a","name":"站点","domain":"x.example.com","ok":true,
+               "status_code":200,"latency_ms":42,"checked_at":"2026-10-06T13:00:00Z",
+               "trustworthy":true,"consecutive_failures":0}]}
+    """
+    let item = try #require(try decode(ReachabilityList.self, tunneled).items.first)
+    #expect(item.ok)
+    #expect(item.trustworthy)
+    #expect(item.latencyMs == 42)
+    #expect(item.isFailing == false)
+
+    // 没有隧道时走 NAT 发夹：成功也不能当作公网可达的证据。
+    let hairpin = """
+    {"items":[{"app_id":"a","name":"站点","domain":"x.example.com","ok":true,
+               "status_code":200,"trustworthy":false,"consecutive_failures":0}]}
+    """
+    let fallback = try #require(try decode(ReachabilityList.self, hairpin).items.first)
+    #expect(fallback.ok)
+    #expect(fallback.trustworthy == false, "发夹路径的成功不能算公网可达")
+}
+
+// 单次失败不该被当成"坏了"：网络抖动、边缘切换都会造成一次失败，
+// 每次都标红会让用户很快学会忽略这个提示。
+@Test func reachabilityOnlyFlagsRepeatedFailures() throws {
+    func item(failures: Int) throws -> ReachabilityItem {
+        let json = """
+        {"items":[{"app_id":"a","name":"站点","domain":"x.example.com","ok":false,
+                   "error":"dial tcp: i/o timeout","trustworthy":true,
+                   "consecutive_failures":\(failures)}]}
+        """
+        return try #require(try decode(ReachabilityList.self, json).items.first)
+    }
+    #expect(try item(failures: 1).isFailing == false, "第一次失败还只是抖动")
+    #expect(try item(failures: 2).isFailing, "连续两次才值得标红")
+}
+
+@Test func reachabilityToleratesAnEmptyList() throws {
+    let item = try decode(ReachabilityList.self, #"{"items":[]}"#)
+    #expect(item.items.isEmpty)
+}

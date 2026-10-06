@@ -370,6 +370,7 @@ struct HomeView: View {
                                 Text("\(sample.cpuPercent.formattedPercent) · \(sample.memoryBytes.formattedBytes)")
                                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                             }
+                            if let reach = model.reachability(for: app) { reachabilityBadge(reach) }
                             StatePill(state: app.state, health: app.health)
                         }
                         .padding(12)
@@ -380,6 +381,44 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    /// 公网可达性指示。
+    ///
+    /// # 为什么"不可信"要单独画出来
+    ///
+    /// 没有隧道时，内核那次检查走的是 NAT 发夹 —— 运营商放不放行都会
+    /// "成功"。把它画成一个绿色的勾，用户会以为公网已经通了，然后在
+    /// 真的从外面打不开时完全摸不着头脑。因此那一档不显示成"通过"，
+    /// 而是显示成"本机可达"，并说清楚它证明了什么、没证明什么。
+    @ViewBuilder private func reachabilityBadge(_ item: ReachabilityItem) -> some View {
+        let tint: Color = item.isFailing ? .red : (item.trustworthy ? .green : .secondary)
+        HStack(spacing: 4) {
+            Image(systemName: item.isFailing ? "exclamationmark.triangle.fill"
+                  : (item.trustworthy ? "globe" : "house"))
+                .font(.caption2)
+                .foregroundStyle(tint)
+            if let ms = item.latencyMs, item.ok {
+                Text("\(ms) ms").font(.caption2).monospacedDigit().foregroundStyle(tint)
+            }
+        }
+        .help(reachabilityHelp(item))
+    }
+
+    private func reachabilityHelp(_ item: ReachabilityItem) -> String {
+        if let error = item.error, !error.isEmpty {
+            return tr("\(item.domain) 公网不可达（连续 \(item.consecutiveFailures) 次）：\(error)",
+                      "\(item.domain) is not reachable from the internet (\(item.consecutiveFailures) failures): \(error)")
+        }
+        if !item.ok {
+            let code = item.statusCode.map { "HTTP \($0)" } ?? tr("无响应", "no response")
+            return tr("\(item.domain) 返回 \(code)", "\(item.domain) returned \(code)")
+        }
+        if !item.trustworthy {
+            return tr("\(item.domain) 在本机可访问；这次检查走的是本机路径，不能证明公网可达。开启 Cloudflare 自动中继后这个检查才有公网意义。",
+                      "\(item.domain) answers locally. This check went through the local path and does not prove public reachability — enable the Cloudflare relay to make it meaningful.")
+        }
+        return tr("\(item.domain) 已从公网确认可达。", "\(item.domain) is confirmed reachable from the internet.")
     }
 
     /// 域名解析状态：当前公网地址 + 每条动态解析任务上次跑成什么样。

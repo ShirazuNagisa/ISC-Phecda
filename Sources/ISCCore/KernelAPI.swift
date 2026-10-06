@@ -199,6 +199,10 @@ extension KernelClient {
         try await send("POST", "/v1/tunnel/disable", body: Optional<Never>.none, as: TunnelStatus.self)
     }
 
+    public func reachability() async throws -> [ReachabilityItem] {
+        try await send("GET", "/v1/reachability", body: Optional<Never>.none, as: ReachabilityList.self).items
+    }
+
     public func certificates() async throws -> [CertificateInfo] {
         try await send("GET", "/v1/certs", body: Optional<Never>.none, as: CertificateList.self).items
     }

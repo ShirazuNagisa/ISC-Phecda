@@ -75,6 +75,12 @@ enum AppSection: String, CaseIterable, Identifiable {
     var presets: [PresetInfo] = []
     var runtimes: [RuntimeInfo] = []
     var metrics: MetricsSnapshot?
+
+    /// 各域名的公网可达性，按域名索引。
+    ///
+    /// 内核每 5 分钟才查一轮，这里跟着指标的节奏取回来即可 —— 判空与
+    /// 展示是界面的事，不必自己再定一个周期。
+    var reachability: [String: ReachabilityItem] = [:]
     var advisories: [Advisory] = []
     var routes: [ProxyRoute] = []
     var certificates: [CertificateInfo] = []
@@ -213,7 +219,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     }
 
     private func clearData() {
-        apps = []; runtimes = []; metrics = nil; advisories = []
+        apps = []; runtimes = []; metrics = nil; advisories = []; reachability = [:]
         routes = []; certificates = []; ddnsTasks = []; credentials = []; ipStatus = nil
         jobs = []; events = []; settings = nil; providers = []
     }
@@ -302,6 +308,22 @@ enum AppSection: String, CaseIterable, Identifiable {
         if let snapshot: MetricsSnapshot = await attempt({ try await self.kernel.metrics() }) {
             metrics = snapshot
         }
+        // 可达性跟着一起取：它自身的节奏是分钟级，而这里只是把结果拿回来。
+        // 失败不覆盖已有结果 —— 一次网络抖动不该让界面上的状态凭空消失。
+        if let items: [ReachabilityItem] = await attempt({ try await self.kernel.reachability() }) {
+            reachability = Dictionary(uniqueKeysWithValues: items.map { ($0.domain, $0) })
+        }
+    }
+
+    /// 某个站点的公网可达性。
+    ///
+    /// 取该站点**第一个**绑定的域名：一个站点可以绑多个，而列表里只放
+    /// 得下一个指示位。要看全部就去站点详情。
+    func reachability(for app: AppRecord) -> ReachabilityItem? {
+        for domain in app.domainNames {
+            if let item = reachability[domain] { return item }
+        }
+        return nil
     }
 
     private func beginMetricsPolling() {

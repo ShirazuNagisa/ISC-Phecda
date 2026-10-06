@@ -37,6 +37,9 @@ def main() -> int:
     app_group = uid("group", "Apps/Phecda")
     products_group = uid("group", "Products")
     src_phase = uid("phase", "sources")
+    embed_phase = uid("phase", "embed")
+    dylib_fr = uid("fileref", "libisc")
+    dylib_bf = uid("buildfile", "libisc")
     res_phase = uid("phase", "resources")
     fwk_phase = uid("phase", "frameworks")
     cfg_list_prj = uid("cfglist", "project")
@@ -76,6 +79,7 @@ def main() -> int:
 {buildfile_lines}
 \t\t{assets_bf} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {assets_fr} /* Assets.xcassets */; }};
 \t\t{pkg_bf} /* ISCCore in Frameworks */ = {{isa = PBXBuildFile; productRef = {pkg_dep} /* ISCCore */; }};
+\t\t{dylib_bf} /* libisc.dylib in Embed Libraries */ = {{isa = PBXBuildFile; fileRef = {dylib_fr} /* libisc.dylib */; settings = {{ATTRIBUTES = (CodeSignOnCopy, ); }}; }};
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,7 +89,30 @@ def main() -> int:
 \t\t{plist_fr} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; }};
 \t\t{entitlements_fr} /* Phecda.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; }};
 \t\t{pkg_fr} /* Package.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; }};
+\t\t{dylib_fr} /* libisc.dylib */ = {{isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; }};
 /* End PBXFileReference section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+\t\t{embed_phase} /* Embed Libraries */ = {{
+\t\t\tisa = PBXCopyFilesBuildPhase;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tdstPath = "";
+\t\t\tdstSubfolderSpec = 10;
+\t\t\tfiles = (
+\t\t\t\t{dylib_bf} /* libisc.dylib in Embed Libraries */,
+\t\t\t);
+\t\t\t// 内核库必须进 Contents/Frameworks 并**用与应用相同的身份签名**。
+\t\t\t//
+\t\t\t// 放在仓库里靠绝对 rpath 引用那条路在签名分发下走不通：库验证会
+\t\t\t// 拒绝 Team ID 不同的 dylib（"mapping process and mapped file
+\t\t\t// (non-platform) have different Team IDs"）。ad-hoc 签名没有 Team ID，
+\t\t\t// 所以反而能加载 —— 这也是它一直看起来正常的原因。
+\t\t\t//
+\t\t\t// CodeSignOnCopy 让 Xcode 用当前签名身份重签它。
+\t\t\tname = "Embed Libraries";
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t}};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 \t\t{fwk_phase} /* Frameworks */ = {{
@@ -104,6 +131,7 @@ def main() -> int:
 \t\t\tchildren = (
 \t\t\t\t{pkg_fr} /* Package.swift */,
 \t\t\t\t{app_group} /* Phecda */,
+\t\t\t\t{dylib_fr} /* libisc.dylib */,
 \t\t\t\t{plist_fr} /* Info.plist */,
 \t\t\t\t{entitlements_fr} /* Phecda.entitlements */,
 \t\t\t\t{products_group} /* Products */,
@@ -137,6 +165,7 @@ def main() -> int:
 \t\t\t\t{src_phase} /* Sources */,
 \t\t\t\t{fwk_phase} /* Frameworks */,
 \t\t\t\t{res_phase} /* Resources */,
+\t\t\t\t{embed_phase} /* Embed Libraries */,
 \t\t\t);
 \t\t\tbuildRules = (
 \t\t\t);

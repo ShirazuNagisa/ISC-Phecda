@@ -92,7 +92,32 @@ App Store 的要求很明确：dylib 放进 `Contents/Frameworks/`，用与应�
 签名（Xcode 里就是 Embed & Sign）。当前它放在仓库的 `Vendor/ISC/` 并通过绝对
 rpath 引用，那条路在签名分发下走不通。
 
-## 关于沙箱的一个纠正
+## 沙箱已生效 —— 以及它立刻暴露的第一个问题
+
+把 `libisc.dylib` 嵌进 bundle 并签名之后，沙箱**确实生效了**（实测：容器
+`~/Library/Containers/app.isc.phecda` 被创建，内核自己报的数据目录也在容器里）。
+
+于是阶段 2 的清单上立刻多了一条，而且是实测出来的：
+
+```
+本地管理通道建立失败，降级为仅回环
+套接字路径过长（112 字节；macOS 上限 104）
+.../Containers/app.isc.phecda/Data/Library/Application Support/ISC Phecda/Kernel/run/isc.sock
+```
+
+容器前缀把数据目录撑长了 39 字节：
+
+| | 路径长度 |
+|---|---|
+| 容器外 | 73 字节 ✅ |
+| 容器内 | **112 字节** ❌（上限 104） |
+
+内核的降级是对的（自动退回回环 TCP，功能不受影响），但"能用"和"该这样"是
+两回事 —— 一个只剩回环的管理通道比 Unix 域套接字少一层 ACL 防护。**数据目录
+必须换到容器内更短的位置**（例如 `Library/Application Support/Phecda`），
+这是阶段 2 的第一件事。
+
+## 关于沙箱的一个纠正（上一轮的误判）
 
 早先我根据"没有创建容器"判断沙箱没生效，并据此写过结论。**那个判断的依据
 不成立**：ad-hoc 签名下沙箱本就不生效，而换成真实身份后进程还没走到沙箱就

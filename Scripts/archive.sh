@@ -22,6 +22,20 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 归档会把 Vendor/ISC 换成 appstore 版本（没有下载能力的那份），
+# **结束时无论成败都要还原**。
+#
+# 不还原的后果很隐蔽：一次失败的归档会把仓库留在那个状态下，而命令行用户
+# 与日常开发正依赖默认构建的下载能力。症状会在很久之后出现（运行时装不上），
+# 与"某次归档"看不出关系 —— 而那时没人会想到去看 Vendor 里那份库。
+VENDOR_BACKUP="$(mktemp -d)"
+cp -R "$ROOT/Vendor/ISC/." "$VENDOR_BACKUP/"
+restore_vendor() {
+  cp -R "$VENDOR_BACKUP/." "$ROOT/Vendor/ISC/"
+  rm -rf "$VENDOR_BACKUP"
+}
+trap restore_vendor EXIT
 ARCHIVE="${ISC_ARCHIVE_PATH:-$ROOT/Build/Phecda.xcarchive}"
 EXPORT="${ISC_EXPORT_PATH:-$ROOT/Build/export}"
 

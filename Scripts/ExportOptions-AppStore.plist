@@ -13,8 +13,16 @@
 <dict>
 	<key>method</key>
 	<string>app-store-connect</string>
-	<key>destination</key>
-	<string>upload</string>
+	<!--
+	  刻意**不写 destination = upload**。
+
+	  写了的话 xcodebuild 导出后会立刻尝试上传，而上传需要 App Store Connect
+	  的凭据（API Key 或已登录的 Xcode 账号）。首次提交时那一步的失败信息很
+	  难读 —— 它混在导出的输出里，看起来像导出失败了。
+
+	  默认（export）只在本地生成 .pkg，之后用 Transporter 或 Xcode Organizer
+	  上传。多一步，但每一步的成败是清楚的。
+	-->
 	<key>signingStyle</key>
 	<string>automatic</string>
 	<key>uploadSymbols</key>

@@ -269,6 +269,27 @@ DEVELOPMENT_TEAM=<你的团队 ID> Scripts/archive.sh
 CodeSign 之前 —— 所以运行时已经在包内、也被签名覆盖了。这正是它必须在
 那里的原因：签名不覆盖之后才放进包里的文件。
 
+#### 管道已实测（只差证书）
+
+在**还没有分发证书**的情况下跑了一遍 `Scripts/archive.sh`，它一路走到了导出：
+
+```
+→ 用 appstore 标签重建内核库
+  ✅ 内核库已确认不含下载器
+→ 内置运行时：php python
+  ✅ 落进归档里的应用包（php 15 MB + python 25 MB）
+→ 归档完成：Build/Phecda.xcarchive
+error: exportArchive No Team Found in Archive
+```
+
+最后那条错误正是**预期的** —— 归档是 ad-hoc 签的（`Signature=adhoc`、
+`TeamIdentifier=not set`），因为还没有分发证书。查归档产物：
+
+- 内核库里的下载器错误串 **0 条**（`appstore` 标签一路生效到归档里）；
+- `Contents/Resources/runtimes/` 里两个归档都在。
+
+也就是说：**除了最后那一步签名，整条管道都验过了。**
+
 #### 上传前建议自查
 
 - **2.5.2**：确认包内没有下载并执行代码的路径（`appstore` 构建标签已处理，

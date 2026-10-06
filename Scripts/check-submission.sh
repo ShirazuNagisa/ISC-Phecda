@@ -38,6 +38,19 @@ need LSMinimumSystemVersion      "系统要求"
 need CFBundleIconName            "商店图标"
 need ITSAppUsesNonExemptEncryption "不声明的话每次上传都被追问加密合规"
 
+# 图标文件必须真的在包里。
+#
+# 只查 CFBundleIconName 不够 —— 键存在但**文件不在**，上传时才报 90236
+# （"does not contain an icon of size 512pt x 512pt @2x"）。踩过一次：
+# 图标集被挪到了一个不被工程编译的资源目录里，键还在、图没了。
+if [ -f "$APP/Contents/Resources/AppIcon.icns" ]; then
+  echo "  ✅ Contents/Resources/AppIcon.icns"
+else
+  echo "  ❌ 包内没有 AppIcon.icns —— 上传会报 90236（图标缺失）"
+  echo "     检查 AppIcon.appiconset 是否在**应用 target 编译的**资源目录里"
+  fail=1
+fi
+
 # 沙箱必须开着 —— 上架版本没有它会被直接拒。
 if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "com.apple.security.app-sandbox"; then
   echo "  ✅ com.apple.security.app-sandbox"

@@ -203,6 +203,19 @@ enum AppSection: String, CaseIterable, Identifiable {
                 phase = .failed
                 return
             }
+            // 把内置运行时的位置告诉内核。
+            //
+            // 内核以 libisc 的形式跑在**同一个进程**里，所以 setenv 对它可见 ——
+            // 这也是唯一不用动 C ABI（D24）就能传配置的办法，与内核那边读
+            // ISC_BUNDLED_RUNTIMES 是一对。
+            //
+            // 目录不存在时照样传：那表示这份构建没有内置运行时，内核会退回
+            // 按需取回。反过来在这里判断存在与否，会把"打包时忘了放"变成
+            // 一个静默的下载，而那正是 App Review 2.5.2 要挡的事。
+            if let resources = Bundle.main.resourceURL {
+                setenv("ISC_BUNDLED_RUNTIMES",
+                       resources.appendingPathComponent("runtimes", isDirectory: true).path, 1)
+            }
             _ = try await kernel.start(dataDirectory: dataDirectory.path)
             phase = .running
             var patch = KernelSettings()

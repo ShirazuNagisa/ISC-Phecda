@@ -311,6 +311,15 @@ def main() -> int:
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
 \t\t\t\tCODE_SIGN_IDENTITY = "-";
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\t// 显式写团队，不让 Xcode 猜。
+\t\t\t\t//
+\t\t\t\t// 这台机器上有**两个** Team ID：9LS4DPCN7H（一张 Apple Development
+\t\t\t\t// 证书，免费个人团队）与 5Q2A46685M（付费团队，能上架）。不写死的话
+\t\t\t\t// Xcode 可能挑中前者，于是归档时签得上、上传时才发现这个团队没有
+\t\t\t\t// 分发权限 —— 而报错在很久之后，与"挑错了团队"看不出关系。
+\t\t\t\t//
+\t\t\t\t// 团队 ID 不是秘密（每个签名过的应用里都有），写在这里是为了可复现。
+\t\t\t\tDEVELOPMENT_TEAM = 5Q2A46685M;
 \t\t\t\tCOMBINE_HIDPI_IMAGES = YES;
 \t\t\t\t// Xcode 16+ 在 Debug 下默认把代码放进 `ISC Phecda.debug.dylib`，
 \t\t\t\t// 主二进制只剩一个 39 KB 的启动器。那个布局在 ad-hoc 签名时会
@@ -345,6 +354,15 @@ def main() -> int:
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
 \t\t\t\tCODE_SIGN_IDENTITY = "-";
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\t// 显式写团队，不让 Xcode 猜。
+\t\t\t\t//
+\t\t\t\t// 这台机器上有**两个** Team ID：9LS4DPCN7H（一张 Apple Development
+\t\t\t\t// 证书，免费个人团队）与 5Q2A46685M（付费团队，能上架）。不写死的话
+\t\t\t\t// Xcode 可能挑中前者，于是归档时签得上、上传时才发现这个团队没有
+\t\t\t\t// 分发权限 —— 而报错在很久之后，与"挑错了团队"看不出关系。
+\t\t\t\t//
+\t\t\t\t// 团队 ID 不是秘密（每个签名过的应用里都有），写在这里是为了可复现。
+\t\t\t\tDEVELOPMENT_TEAM = 5Q2A46685M;
 \t\t\t\tCOMBINE_HIDPI_IMAGES = YES;
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tENABLE_HARDENED_RUNTIME = YES;

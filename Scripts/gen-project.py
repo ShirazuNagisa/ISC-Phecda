@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+"""生成 Phecda.xcodeproj。
+
+# 为什么是"生成"而不是"手写"
+
+工程文件是 Xcode 的私有格式：几千行、UUID 互相引用、冲突时几乎没法手工合。
+本仓库没有 XcodeGen（也不想为它引入 Homebrew），因此把生成过程本身留在
+脚本里 —— 它是可读的、可重跑的，而 pbxproj 只是它的产物。
+
+重跑：python3 Scripts/gen-project.py
+"""
+import hashlib
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+APP = ROOT / "Apps" / "Phecda"
+
+def uid(*parts: str) -> str:
+    """确定性的 24 位十六进制 UUID。
+
+    确定性很重要：每跑一次都换一批 UUID 的话，git diff 里整个文件都会翻新，
+    而"这次改了什么"就看不出来了。
+    """
+    return hashlib.sha1("|".join(parts).encode()).hexdigest()[:24].upper()
+
+def main() -> int:
+    swift_files = sorted(p.name for p in APP.glob("*.swift"))
+    if not swift_files:
+        print(f"❌ 在 {APP} 下没找到任何 .swift", file=sys.stderr)
+        return 1
+
+    prod = uid("product", "Phecda")
+    tgt = uid("target", "Phecda")
+    prj = uid("project")
+    main_group = uid("group", "main")
+    app_group = uid("group", "Apps/Phecda")
+    products_group = uid("group", "Products")
+    src_phase = uid("phase", "sources")
+    sign_phase = uid("phase", "presign")
+    res_phase = uid("phase", "resources")
+    fwk_phase = uid("phase", "frameworks")
+    cfg_list_prj = uid("cfglist", "project")
+    cfg_list_tgt = uid("cfglist", "target")
+
+    file_refs, build_files = [], []
+    for name in swift_files:
+        fr, bf = uid("fileref", name), uid("buildfile", name)
+        file_refs.append(
+            f'\t\t{fr} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = '
+            f'sourcecode.swift; path = {name}; sourceTree = "<group>"; }};')
+        build_files.append(
+            f'\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};')
+
+    assets_fr, assets_bf = uid("fileref", "Assets"), uid("buildfile", "Assets")
+    plist_fr = uid("fileref", "Info.plist")
+    entitlements_fr = uid("fileref", "Phecda.entitlements")
+    pkg_fr = uid("fileref", "Package.swift")
+    pkg_dep = uid("pkgdep", "ISCCore")
+    pkg_ref = uid("pkgref", "local")
+    pkg_bf = uid("buildfile", "ISCCore")
+
+    swift_names = "\n".join(f'\t\t\t\t{uid("buildfile", n)} /* {n} in Sources */,' for n in swift_files)
+    fileref_lines = "\n".join(file_refs)
+    buildfile_lines = "\n".join(build_files)
+    group_children = "\n".join(f'\t\t\t\t{uid("fileref", n)} /* {n} */,' for n in swift_files)
+
+    pbx = f'''// !$*UTF8*$!
+{{
+	archiveVersion = 1;
+	classes = {{
+	}};
+	objectVersion = 60;
+	objects = {{
+
+/* Begin PBXBuildFile section */
+{buildfile_lines}
+\t\t{assets_bf} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {assets_fr} /* Assets.xcassets */; }};
+\t\t{pkg_bf} /* ISCCore in Frameworks */ = {{isa = PBXBuildFile; productRef = {pkg_dep} /* ISCCore */; }};
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+\t\t{prod} /* ISC Phecda.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ISC Phecda.app"; sourceTree = BUILT_PRODUCTS_DIR; }};
+{fileref_lines}
+\t\t{assets_fr} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};
+\t\t{plist_fr} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; }};
+\t\t{entitlements_fr} /* Phecda.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; }};
+\t\t{pkg_fr} /* Package.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; }};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+\t\t{fwk_phase} /* Frameworks */ = {{
+\t\t\tisa = PBXFrameworksBuildPhase;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tfiles = (
+\t\t\t\t{pkg_bf} /* ISCCore in Frameworks */,
+\t\t\t);
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t}};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+\t\t{main_group} = {{
+\t\t\tisa = PBXGroup;
+\t\t\tchildren = (
+\t\t\t\t{pkg_fr} /* Package.swift */,
+\t\t\t\t{app_group} /* Phecda */,
+\t\t\t\t{plist_fr} /* Info.plist */,
+\t\t\t\t{entitlements_fr} /* Phecda.entitlements */,
+\t\t\t\t{products_group} /* Products */,
+\t\t\t);
+\t\t\tsourceTree = "<group>";
+\t\t}};
+\t\t{app_group} /* Phecda */ = {{
+\t\t\tisa = PBXGroup;
+\t\t\tchildren = (
+{group_children}
+\t\t\t\t{assets_fr} /* Assets.xcassets */,
+\t\t\t);
+\t\t\tpath = Apps/Phecda;
+\t\t\tsourceTree = "<group>";
+\t\t}};
+\t\t{products_group} /* Products */ = {{
+\t\t\tisa = PBXGroup;
+\t\t\tchildren = (
+\t\t\t\t{prod} /* ISC Phecda.app */,
+\t\t\t);
+\t\t\tname = Products;
+\t\t\tsourceTree = "<group>";
+\t\t}};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+\t\t{tgt} /* Phecda */ = {{
+\t\t\tisa = PBXNativeTarget;
+\t\t\tbuildConfigurationList = {cfg_list_tgt} /* Build configuration list for PBXNativeTarget "Phecda" */;
+\t\t\tbuildPhases = (
+\t\t\t\t{src_phase} /* Sources */,
+\t\t\t\t{fwk_phase} /* Frameworks */,
+\t\t\t\t{res_phase} /* Resources */,
+\t\t\t\t{sign_phase} /* Pre-sign the executable */,
+\t\t\t);
+\t\t\tbuildRules = (
+\t\t\t);
+\t\t\tdependencies = (
+\t\t\t);
+\t\t\tname = Phecda;
+\t\t\tpackageProductDependencies = (
+\t\t\t\t{pkg_dep} /* ISCCore */,
+\t\t\t);
+\t\t\tproductName = Phecda;
+\t\t\tproductReference = {prod} /* ISC Phecda.app */;
+\t\t\tproductType = "com.apple.product-type.application";
+\t\t}};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+\t\t{prj} /* Project object */ = {{
+\t\t\tisa = PBXProject;
+\t\t\tattributes = {{
+\t\t\t\tBuildIndependentTargetsInParallel = 1;
+\t\t\t\tLastSwiftUpdateCheck = 2700;
+\t\t\t\tLastUpgradeCheck = 2700;
+\t\t\t\tTargetAttributes = {{
+\t\t\t\t\t{tgt} = {{
+\t\t\t\t\t\tCreatedOnToolsVersion = 27.0;
+\t\t\t\t\t}};
+\t\t\t\t}};
+\t\t\t}};
+\t\t\tbuildConfigurationList = {cfg_list_prj} /* Build configuration list for PBXProject "Phecda" */;
+\t\t\tdevelopmentRegion = en;
+\t\t\thasScannedForEncodings = 0;
+\t\t\tknownRegions = (
+\t\t\t\ten,
+\t\t\t\t"zh-Hans",
+\t\t\t\tBase,
+\t\t\t);
+\t\t\tmainGroup = {main_group};
+\t\t\tpackageReferences = (
+\t\t\t\t{pkg_ref} /* XCLocalSwiftPackageReference "." */,
+\t\t\t);
+\t\t\tproductRefGroup = {products_group} /* Products */;
+\t\t\tprojectDirPath = "";
+\t\t\tprojectRoot = "";
+\t\t\ttargets = (
+\t\t\t\t{tgt} /* Phecda */,
+\t\t\t);
+\t\t}};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+\t\t{sign_phase} /* Pre-sign the executable */ = {{
+\t\t\tisa = PBXShellScriptBuildPhase;
+\t\t\talwaysOutOfDate = 1;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tfiles = (
+\t\t\t);
+\t\t\tinputFileListPaths = (
+\t\t\t);
+\t\t\tinputPaths = (
+\t\t\t);
+\t\t\tname = "Pre-sign the executable";
+\t\t\toutputFileListPaths = (
+\t\t\t);
+\t\t\toutputPaths = (
+\t\t\t);
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t\tshellPath = /bin/sh;
+\t\t\tshellScript = "\\"$SRCROOT/Scripts/pre-sign.sh\\"\\n";
+\t\t}};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+\t\t{res_phase} /* Resources */ = {{
+\t\t\tisa = PBXResourcesBuildPhase;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tfiles = (
+\t\t\t\t{assets_bf} /* Assets.xcassets in Resources */,
+\t\t\t);
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t}};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+\t\t{src_phase} /* Sources */ = {{
+\t\t\tisa = PBXSourcesBuildPhase;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tfiles = (
+{swift_names}
+\t\t\t);
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t}};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+\t\t{uid("cfg", "prj", "debug")} /* Debug */ = {{
+\t\t\tisa = XCBuildConfiguration;
+\t\t\tbuildSettings = {{
+\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
+\t\t\t\tCLANG_ENABLE_OBJC_WEAK = YES;
+\t\t\t\tCOPY_PHASE_STRIP = NO;
+\t\t\t\tDEBUG_INFORMATION_FORMAT = dwarf;
+\t\t\t\tENABLE_STRICT_OBJC_MSGSEND = YES;
+\t\t\t\tENABLE_TESTABILITY = YES;
+\t\t\t\tGCC_OPTIMIZATION_LEVEL = 0;
+\t\t\t\tGCC_PREPROCESSOR_DEFINITIONS = (
+\t\t\t\t\t"DEBUG=1",
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t);
+\t\t\t\tMACOSX_DEPLOYMENT_TARGET = 27.0;
+\t\t\t\tMTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+\t\t\t\tONLY_ACTIVE_ARCH = YES;
+\t\t\t\tSDKROOT = macosx;
+\t\t\t\tSWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+\t\t\t\tSWIFT_OPTIMIZATION_LEVEL = "-Onone";
+\t\t\t\tSWIFT_VERSION = 6.0;
+\t\t\t}};
+\t\t\tname = Debug;
+\t\t}};
+\t\t{uid("cfg", "prj", "release")} /* Release */ = {{
+\t\t\tisa = XCBuildConfiguration;
+\t\t\tbuildSettings = {{
+\t\t\t\tALWAYS_SEARCH_USER_PATHS = NO;
+\t\t\t\tCLANG_ENABLE_OBJC_WEAK = YES;
+\t\t\t\tCOPY_PHASE_STRIP = NO;
+\t\t\t\tDEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+\t\t\t\tENABLE_NS_ASSERTIONS = NO;
+\t\t\t\tENABLE_STRICT_OBJC_MSGSEND = YES;
+\t\t\t\tMACOSX_DEPLOYMENT_TARGET = 27.0;
+\t\t\t\tMTL_ENABLE_DEBUG_INFO = NO;
+\t\t\t\tSDKROOT = macosx;
+\t\t\t\tSWIFT_COMPILATION_MODE = wholemodule;
+\t\t\t\tSWIFT_VERSION = 6.0;
+\t\t\t}};
+\t\t\tname = Release;
+\t\t}};
+\t\t{uid("cfg", "tgt", "debug")} /* Debug */ = {{
+\t\t\tisa = XCBuildConfiguration;
+\t\t\tbuildSettings = {{
+\t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+\t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
+\t\t\t\tCODE_SIGN_IDENTITY = "-";
+\t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\tCOMBINE_HIDPI_IMAGES = YES;
+\t\t\t\t// Xcode 16+ 在 Debug 下默认把代码放进 `ISC Phecda.debug.dylib`，
+\t\t\t\t// 主二进制只剩一个 39 KB 的启动器。那个布局在 ad-hoc 签名时会
+\t\t\t\t// 失败（"code object is not signed at all"），而它唯一的用途是
+\t\t\t\t// SwiftUI 预览 —— 为一个预览保留一种会挡住构建的产物布局不值得。
+\t\t\t\tENABLE_DEBUG_DYLIB = NO;
+\t\t\t\tCURRENT_PROJECT_VERSION = 1;
+\t\t\t\tENABLE_HARDENED_RUNTIME = YES;
+\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
+\t\t\t\tINFOPLIST_FILE = Resources/Info.plist;
+\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t\t"@executable_path/../Frameworks",
+\t\t\t\t);
+\t\t\t\tMARKETING_VERSION = 0.4.2;
+\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
+\t\t\t\tPRODUCT_NAME = "ISC Phecda";
+\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
+\t\t\t\t// 这三条对应 Package.swift 里的 defaultIsolation 与
+\t\t\t\t// NonisolatedNonsendingByDefault。漏掉它们的症状是几十条
+\t\t\t\t// "sending ... risks causing data races" —— 而同一份代码在包里
+\t\t\t\t// 编译得好好的，看起来像是搬工程搬坏了。
+\t\t\t\tSWIFT_APPROACHABLE_CONCURRENCY = YES;
+\t\t\t\tSWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+\t\t\t\tSWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES;
+\t\t\t}};
+\t\t\tname = Debug;
+\t\t}};
+\t\t{uid("cfg", "tgt", "release")} /* Release */ = {{
+\t\t\tisa = XCBuildConfiguration;
+\t\t\tbuildSettings = {{
+\t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+\t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
+\t\t\t\tCODE_SIGN_IDENTITY = "-";
+\t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\tCOMBINE_HIDPI_IMAGES = YES;
+\t\t\t\tCURRENT_PROJECT_VERSION = 1;
+\t\t\t\tENABLE_HARDENED_RUNTIME = YES;
+\t\t\t\tGENERATE_INFOPLIST_FILE = NO;
+\t\t\t\tINFOPLIST_FILE = Resources/Info.plist;
+\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
+\t\t\t\t\t"$(inherited)",
+\t\t\t\t\t"@executable_path/../Frameworks",
+\t\t\t\t);
+\t\t\t\tMARKETING_VERSION = 0.4.2;
+\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
+\t\t\t\tPRODUCT_NAME = "ISC Phecda";
+\t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
+\t\t\t\t// 这三条对应 Package.swift 里的 defaultIsolation 与
+\t\t\t\t// NonisolatedNonsendingByDefault。漏掉它们的症状是几十条
+\t\t\t\t// "sending ... risks causing data races" —— 而同一份代码在包里
+\t\t\t\t// 编译得好好的，看起来像是搬工程搬坏了。
+\t\t\t\tSWIFT_APPROACHABLE_CONCURRENCY = YES;
+\t\t\t\tSWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+\t\t\t\tSWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES;
+\t\t\t}};
+\t\t\tname = Release;
+\t\t}};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+\t\t{cfg_list_prj} /* Build configuration list for PBXProject "Phecda" */ = {{
+\t\t\tisa = XCConfigurationList;
+\t\t\tbuildConfigurations = (
+\t\t\t\t{uid("cfg", "prj", "debug")} /* Debug */,
+\t\t\t\t{uid("cfg", "prj", "release")} /* Release */,
+\t\t\t);
+\t\t\tdefaultConfigurationIsVisible = 0;
+\t\t\tdefaultConfigurationName = Release;
+\t\t}};
+\t\t{cfg_list_tgt} /* Build configuration list for PBXNativeTarget "Phecda" */ = {{
+\t\t\tisa = XCConfigurationList;
+\t\t\tbuildConfigurations = (
+\t\t\t\t{uid("cfg", "tgt", "debug")} /* Debug */,
+\t\t\t\t{uid("cfg", "tgt", "release")} /* Release */,
+\t\t\t);
+\t\t\tdefaultConfigurationIsVisible = 0;
+\t\t\tdefaultConfigurationName = Release;
+\t\t}};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+\t\t{pkg_ref} /* XCLocalSwiftPackageReference "." */ = {{
+\t\t\tisa = XCLocalSwiftPackageReference;
+\t\t\trelativePath = .;
+\t\t}};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+\t\t{pkg_dep} /* ISCCore */ = {{
+\t\t\tisa = XCSwiftPackageProductDependency;
+\t\t\tproductName = ISCCore;
+\t\t}};
+/* End XCSwiftPackageProductDependency section */
+	}};
+	rootObject = {prj} /* Project object */;
+}}
+'''
+    out = ROOT / "Phecda.xcodeproj"
+    out.mkdir(exist_ok=True)
+    (out / "project.pbxproj").write_text(pbx)
+    print(f"✅ 已生成 {out}（{len(swift_files)} 个源文件）")
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

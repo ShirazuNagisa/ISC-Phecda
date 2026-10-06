@@ -48,14 +48,11 @@ struct OnboardingView: View {
     /// Xcode 跑 SwiftPM 包时进程没有应用包，那个属性会退化成通用图标 ——
     /// 也就是这半边的意义整个消失。
     ///
-    /// 必须显式指定 `bundle: .module`。资源目录是 ISCApp 的 SwiftPM 资源，
-    /// 编译进的是 `ISCPhecda_ISCApp.bundle`，而 `Image("…")` 默认只在**主
-    /// bundle** 里找 —— 从 Xcode 跑时主 bundle 里什么都没有，结果是左半边
-    /// 一片空白，且不报任何错。
+    /// 资源目录现在挂在**应用 target** 上，因此走主 bundle 的默认查找即可。
     private var markPane: some View {
         VStack(spacing: 18) {
             Spacer()
-            Image("AppMark", bundle: .module)
+            Image("AppMark")
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)

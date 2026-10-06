@@ -64,12 +64,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     ///    网络图标，也不要让菜单栏上出现一个空白区域（那样用户连点都点不到）。
     static func menuBarImage() -> NSImage {
         let fallback = NSImage(systemSymbolName: "network", accessibilityDescription: "ISC Phecda")
-        // 两个来源都要试：资源目录是 ISCApp 的 SwiftPM 资源（编进
-        // ISCPhecda_ISCApp.bundle），而手工打的 .app 里 Assets.car 直接放在
-        // Contents/Resources，主 bundle 找得到。
+        // 资源目录是**应用 target** 的资源，编译进主 bundle 的 Assets.car。
         //
-        // 只试其中一个的后果是静默的：图标变成通用符号，而代码看起来没问题。
-        let image = Bundle.module.image(forResource: "MenuBarIcon") ?? NSImage(named: "MenuBarIcon")
+        // 早先它挂在 SwiftPM 的 ISCApp target 上，那时要写 Bundle.module；
+        // 改成工程产出应用之后那个访问器不存在了，而症状是编译期直接报
+        // "type 'Bundle' has no member 'module'" —— 这一条属于会自己暴露的，
+        // 比"图标静默变通用"那类好得多。
+        let image = NSImage(named: "MenuBarIcon")
         guard let image else { return fallback ?? NSImage() }
         image.isTemplate = true
         image.size = NSSize(width: 18, height: 18)

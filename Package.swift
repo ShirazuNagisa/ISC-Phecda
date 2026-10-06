@@ -43,7 +43,6 @@ let package = Package(
     name: "ISC-Phecda",
     platforms: [.macOS("27.0")],
     products: [
-        .executable(name: "ISCPhecda", targets: ["ISCApp"]),
         .library(name: "ISCCore", targets: ["ISCCore"]),
     ],
     targets: [
@@ -59,21 +58,6 @@ let package = Package(
                     "-Xlinker", "-rpath", "-Xlinker", "@loader_path/../../../../Vendor/ISC",
                     "-Xlinker", "-rpath", "-Xlinker", vendorPath,
                 ])
-            ]
-        ),
-        .executableTarget(
-            name: "ISCApp",
-            dependencies: ["ISCCore"],
-            // 资源必须声明在这里，否则 `swift build` / Xcode 跑出来的产物
-            // **完全没有资源** —— 资源目录一直是靠 Scripts/build-app.sh 里的
-            // actool 手工编进 .app 的，SwiftPM 那条路不知道它存在。
-            //
-            // 症状是静默的：`Image("AppMark")` 只是一个空白，不报错。
-            // 菜单栏图标也一直受这个影响，只是它有 SF Symbol 兜底。
-            resources: [.process("Assets.xcassets")],
-            swiftSettings: [
-                .defaultIsolation(MainActor.self),
-                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
             ]
         ),
         .testTarget(name: "ISCCoreTests", dependencies: ["ISCCore"]),

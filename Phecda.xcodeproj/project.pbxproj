@@ -1,0 +1,369 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		E9BE1BE85142E247DBA09358 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9DB023D4B0B3633CE51B500 /* AppModel.swift */; };
+		C9A9BE9CEE2766AEC9544A31 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6D831B819199F4E23D714B /* Components.swift */; };
+		15003573360A256856BDC6B8 /* CredentialViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A27F37AB95B4A2294A603 /* CredentialViews.swift */; };
+		9D05464535922341EDF69386 /* DDNSViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88344F029A80A3ACCBE2195E /* DDNSViews.swift */; };
+		B2DBA1485382608730FA6651 /* DNSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8D08E06D4D29F563765D1A /* DNSView.swift */; };
+		15266CCE1D5FF62B90091003 /* ISCPhecdaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */; };
+		AE58EA9CCFCF714F2971CB25 /* JobsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF6775A1F7CFB3484375333 /* JobsView.swift */; };
+		96ACDBFBF2FEBCE0FB6BF26E /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6816ACB6F965A41156ABDF31 /* Localization.swift */; };
+		372C0914F967F55F112CA338 /* MenuBarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */; };
+		82A94A24F2C5CAC2DD2C89EB /* NewServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B812F00D383CCC66E219043 /* NewServiceView.swift */; };
+		A4D262DD21B9CC748D235643 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C1B1E16167E90D15542DF5 /* OnboardingView.swift */; };
+		369908FF7BD4A64D1E070D70 /* RemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD290EF95E29A5EFA091F6C /* RemoteView.swift */; };
+		E5C2186E8F621B83B7CED5DD /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA3EC0E36331858BAF6A73A /* RootView.swift */; };
+		91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D14E1EC523B5F101C229441 /* ServicesView.swift */; };
+		49E90B00956BD92C98B608D1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052E6803097DFF8032DE202 /* SettingsView.swift */; };
+		165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AD8FE6F4409ABA226995E31D /* Assets.xcassets */; };
+		94D617931304E635D18FBB8E /* ISCCore in Frameworks */ = {isa = PBXBuildFile; productRef = 53BF02C4C7C2972709CC49C4 /* ISCCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0D8305EDAE4ABD77DAA2B2DE /* ISC Phecda.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ISC Phecda.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9DB023D4B0B3633CE51B500 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		9F6D831B819199F4E23D714B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		2C7A27F37AB95B4A2294A603 /* CredentialViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialViews.swift; sourceTree = "<group>"; };
+		88344F029A80A3ACCBE2195E /* DDNSViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DDNSViews.swift; sourceTree = "<group>"; };
+		6D8D08E06D4D29F563765D1A /* DNSView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DNSView.swift; sourceTree = "<group>"; };
+		FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISCPhecdaApp.swift; sourceTree = "<group>"; };
+		6BF6775A1F7CFB3484375333 /* JobsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobsView.swift; sourceTree = "<group>"; };
+		6816ACB6F965A41156ABDF31 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
+		5B812F00D383CCC66E219043 /* NewServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewServiceView.swift; sourceTree = "<group>"; };
+		22C1B1E16167E90D15542DF5 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		3AD290EF95E29A5EFA091F6C /* RemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteView.swift; sourceTree = "<group>"; };
+		ADA3EC0E36331858BAF6A73A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		5D14E1EC523B5F101C229441 /* ServicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesView.swift; sourceTree = "<group>"; };
+		2052E6803097DFF8032DE202 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AD8FE6F4409ABA226995E31D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
+		E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; };
+		65DC653B3D2AC8A7EB6F881D /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B365BE9502C3128F5D540532 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94D617931304E635D18FBB8E /* ISCCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E2258AA71B17E0A3529C6C95 = {
+			isa = PBXGroup;
+			children = (
+				65DC653B3D2AC8A7EB6F881D /* Package.swift */,
+				E5C7E46CD93DD4B69A6F8AAB /* Phecda */,
+				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
+				E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */,
+				31A5E41A9BD04E385DB196E5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E5C7E46CD93DD4B69A6F8AAB /* Phecda */ = {
+			isa = PBXGroup;
+			children = (
+				B9DB023D4B0B3633CE51B500 /* AppModel.swift */,
+				9F6D831B819199F4E23D714B /* Components.swift */,
+				2C7A27F37AB95B4A2294A603 /* CredentialViews.swift */,
+				88344F029A80A3ACCBE2195E /* DDNSViews.swift */,
+				6D8D08E06D4D29F563765D1A /* DNSView.swift */,
+				FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */,
+				6BF6775A1F7CFB3484375333 /* JobsView.swift */,
+				6816ACB6F965A41156ABDF31 /* Localization.swift */,
+				4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */,
+				5B812F00D383CCC66E219043 /* NewServiceView.swift */,
+				22C1B1E16167E90D15542DF5 /* OnboardingView.swift */,
+				3AD290EF95E29A5EFA091F6C /* RemoteView.swift */,
+				ADA3EC0E36331858BAF6A73A /* RootView.swift */,
+				5D14E1EC523B5F101C229441 /* ServicesView.swift */,
+				2052E6803097DFF8032DE202 /* SettingsView.swift */,
+				AD8FE6F4409ABA226995E31D /* Assets.xcassets */,
+			);
+			path = Apps/Phecda;
+			sourceTree = "<group>";
+		};
+		31A5E41A9BD04E385DB196E5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0D8305EDAE4ABD77DAA2B2DE /* ISC Phecda.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		329FA94ED22855CF70D80A07 /* Phecda */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 09185177824D0012F345AF29 /* Build configuration list for PBXNativeTarget "Phecda" */;
+			buildPhases = (
+				E9AC67C993D2511BDAD48561 /* Sources */,
+				B365BE9502C3128F5D540532 /* Frameworks */,
+				483A0E0C9C74F0CBD6A612E6 /* Resources */,
+				DB685728F03589884DA4FA1A /* Pre-sign the executable */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Phecda;
+			packageProductDependencies = (
+				53BF02C4C7C2972709CC49C4 /* ISCCore */,
+			);
+			productName = Phecda;
+			productReference = 0D8305EDAE4ABD77DAA2B2DE /* ISC Phecda.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					329FA94ED22855CF70D80A07 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = F086F31674BEA44957E3CCA5 /* Build configuration list for PBXProject "Phecda" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				"zh-Hans",
+				Base,
+			);
+			mainGroup = E2258AA71B17E0A3529C6C95;
+			packageReferences = (
+				A4DCF8F3DB48130E0C6D2628 /* XCLocalSwiftPackageReference "." */,
+			);
+			productRefGroup = 31A5E41A9BD04E385DB196E5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				329FA94ED22855CF70D80A07 /* Phecda */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		DB685728F03589884DA4FA1A /* Pre-sign the executable */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Pre-sign the executable";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/pre-sign.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		483A0E0C9C74F0CBD6A612E6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E9AC67C993D2511BDAD48561 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9BE1BE85142E247DBA09358 /* AppModel.swift in Sources */,
+				C9A9BE9CEE2766AEC9544A31 /* Components.swift in Sources */,
+				15003573360A256856BDC6B8 /* CredentialViews.swift in Sources */,
+				9D05464535922341EDF69386 /* DDNSViews.swift in Sources */,
+				B2DBA1485382608730FA6651 /* DNSView.swift in Sources */,
+				15266CCE1D5FF62B90091003 /* ISCPhecdaApp.swift in Sources */,
+				AE58EA9CCFCF714F2971CB25 /* JobsView.swift in Sources */,
+				96ACDBFBF2FEBCE0FB6BF26E /* Localization.swift in Sources */,
+				372C0914F967F55F112CA338 /* MenuBarPanelView.swift in Sources */,
+				82A94A24F2C5CAC2DD2C89EB /* NewServiceView.swift in Sources */,
+				A4D262DD21B9CC748D235643 /* OnboardingView.swift in Sources */,
+				369908FF7BD4A64D1E070D70 /* RemoteView.swift in Sources */,
+				E5C2186E8F621B83B7CED5DD /* RootView.swift in Sources */,
+				91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */,
+				49E90B00956BD92C98B608D1 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D1A0394F944F99DF5E1B8EDE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		40CD00ACB4DCCE2EDBD12152 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B5D015D0DB940663B8712B2D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				// Xcode 16+ 在 Debug 下默认把代码放进 `ISC Phecda.debug.dylib`，
+				// 主二进制只剩一个 39 KB 的启动器。那个布局在 ad-hoc 签名时会
+				// 失败（"code object is not signed at all"），而它唯一的用途是
+				// SwiftUI 预览 —— 为一个预览保留一种会挡住构建的产物布局不值得。
+				ENABLE_DEBUG_DYLIB = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.4.2;
+				PRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
+				PRODUCT_NAME = "ISC Phecda";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				// 这三条对应 Package.swift 里的 defaultIsolation 与
+				// NonisolatedNonsendingByDefault。漏掉它们的症状是几十条
+				// "sending ... risks causing data races" —— 而同一份代码在包里
+				// 编译得好好的，看起来像是搬工程搬坏了。
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES;
+			};
+			name = Debug;
+		};
+		0CDA8280A8A8625F064950EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.4.2;
+				PRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
+				PRODUCT_NAME = "ISC Phecda";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				// 这三条对应 Package.swift 里的 defaultIsolation 与
+				// NonisolatedNonsendingByDefault。漏掉它们的症状是几十条
+				// "sending ... risks causing data races" —— 而同一份代码在包里
+				// 编译得好好的，看起来像是搬工程搬坏了。
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F086F31674BEA44957E3CCA5 /* Build configuration list for PBXProject "Phecda" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1A0394F944F99DF5E1B8EDE /* Debug */,
+				40CD00ACB4DCCE2EDBD12152 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		09185177824D0012F345AF29 /* Build configuration list for PBXNativeTarget "Phecda" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B5D015D0DB940663B8712B2D /* Debug */,
+				0CDA8280A8A8625F064950EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A4DCF8F3DB48130E0C6D2628 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		53BF02C4C7C2972709CC49C4 /* ISCCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ISCCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

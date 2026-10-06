@@ -134,9 +134,29 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     init(dataDirectory: URL? = nil) {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let root = support.appendingPathComponent("ISC Phecda", isDirectory: true)
-        self.dataDirectory = dataDirectory ?? root.appendingPathComponent("Kernel", isDirectory: true)
-        Self.migrateLegacyData(from: support.appendingPathComponent("ISC", isDirectory: true), to: root)
+
+        // # 目录名短是**功能要求**，不是审美
+        //
+        // 内核的 Unix 域套接字放在 `<数据目录>/run/isc.sock`，而 macOS 的
+        // `sun_path` 只有 104 字节。沙箱把数据目录推进容器之后，前缀
+        // `~/Library/Containers/app.isc.phecda/Data/Library/Application Support/`
+        // 一个人就占掉 80 字节 —— 原来的 `ISC Phecda/Kernel` 再加 17 字节，
+        // 整个路径到 112，超限，内核只能降级成纯回环 TCP。
+        //
+        // 超限时内核会如实报警并降级（不是静默失败），但"能用"和"该这样"
+        // 是两回事：一个只剩回环的管理通道比 Unix 域套接字少一层 ACL 防护。
+        //
+        // 注意这仍然是**余量有限**的修法：现在 99 字节，用户名再长十几位
+        // 照样会超。真正稳的做法是让内核不依赖绝对路径长度（改动更大，
+        // 见 Documentation/APPSTORE.md 阶段 2）。
+        let root = support.appendingPathComponent("Phecda", isDirectory: true)
+        self.dataDirectory = dataDirectory ?? root
+
+        // 按"最近用过的"顺序迁移，先成功的那个会让后面几次变成空操作。
+        Self.migrateLegacyData(
+            from: support.appendingPathComponent("ISC Phecda/Kernel", isDirectory: true), to: root)
+        Self.migrateLegacyData(
+            from: support.appendingPathComponent("ISC", isDirectory: true), to: root)
     }
 
     /// 把 0.1.x 的数据目录搬到新位置。

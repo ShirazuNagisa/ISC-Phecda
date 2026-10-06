@@ -22,7 +22,7 @@ Two build-time guards keep that boundary honest:
 
 - `Scripts/verify-vendor.sh` checks `Vendor/ISC` against the pinned digests in
   `Vendor/ISC/SHA256SUMS`, which are copied from the ISC-Core release. Both `Scripts/test.sh`
-  and `Scripts/build-app.sh` run it first, so a mismatched kernel fails the build instead of
+  and the Xcode build runs it first, so a mismatched kernel fails the build instead of
   shipping.
 - Kernel lookup paths are relative to the loading binary (`@executable_path/../Frameworks`
   for the bundle, `@loader_path/...` for the checkout and test bundle). No absolute path from

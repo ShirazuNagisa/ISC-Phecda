@@ -142,9 +142,9 @@ rpath 引用，那条路在签名分发下走不通。
   target（`@main` 必须在可执行 target 里，而 App Store 应用由工程产出）。
 - `ISCCore` 作为本地包依赖保持不变。
 - 签名、entitlements、Hardened Runtime 收进工程配置。
-- `Scripts/build-app.sh` 退役为校验脚本（或删除）；`Documentation/SDK.md` 里
-  那段 rpath 说明要重写 —— 工程产出的是 .app，`@executable_path/../Frameworks`
-  那条 rpath 这时才真正成立。
+- ~~`Scripts/build-app.sh`~~ **已删除** —— 它比"失效"更糟：拷的是 .build 里过时
+  的二进制，还在旧目录上盖章报成功。~~`SDK.md` 的 rpath 说明~~ **已重写**为
+  "How the library is found"，区分应用（嵌入 bundle）与测试（仓库路径）两种。
 
 ### 阶段 2 · 沙箱适配
 

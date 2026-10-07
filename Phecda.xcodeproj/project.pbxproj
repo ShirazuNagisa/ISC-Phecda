@@ -15,6 +15,7 @@
 		15266CCE1D5FF62B90091003 /* ISCPhecdaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */; };
 		AE58EA9CCFCF714F2971CB25 /* JobsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF6775A1F7CFB3484375333 /* JobsView.swift */; };
 		96ACDBFBF2FEBCE0FB6BF26E /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6816ACB6F965A41156ABDF31 /* Localization.swift */; };
+		AC4A5FCFC6FEBCDEE531FAC6 /* LogExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82505F9DFC42916F93396B73 /* LogExport.swift */; };
 		372C0914F967F55F112CA338 /* MenuBarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */; };
 		82A94A24F2C5CAC2DD2C89EB /* NewServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B812F00D383CCC66E219043 /* NewServiceView.swift */; };
 		A4D262DD21B9CC748D235643 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C1B1E16167E90D15542DF5 /* OnboardingView.swift */; };
@@ -22,6 +23,7 @@
 		E5C2186E8F621B83B7CED5DD /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA3EC0E36331858BAF6A73A /* RootView.swift */; };
 		91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D14E1EC523B5F101C229441 /* ServicesView.swift */; };
 		49E90B00956BD92C98B608D1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052E6803097DFF8032DE202 /* SettingsView.swift */; };
+		C5D31064CAECF957F16DBDCD /* ApnsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12308B7286E6A8C67DB7DA4A /* ApnsService.swift */; };
 		165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AD8FE6F4409ABA226995E31D /* Assets.xcassets */; };
 		BB61120D31B45731F5D7454D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */; };
 		94D617931304E635D18FBB8E /* ISCCore in Frameworks */ = {isa = PBXBuildFile; productRef = 53BF02C4C7C2972709CC49C4 /* ISCCore */; };
@@ -38,6 +40,7 @@
 		FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISCPhecdaApp.swift; sourceTree = "<group>"; };
 		6BF6775A1F7CFB3484375333 /* JobsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobsView.swift; sourceTree = "<group>"; };
 		6816ACB6F965A41156ABDF31 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		82505F9DFC42916F93396B73 /* LogExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogExport.swift; sourceTree = "<group>"; };
 		4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
 		5B812F00D383CCC66E219043 /* NewServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewServiceView.swift; sourceTree = "<group>"; };
 		22C1B1E16167E90D15542DF5 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -45,11 +48,13 @@
 		ADA3EC0E36331858BAF6A73A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		5D14E1EC523B5F101C229441 /* ServicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesView.swift; sourceTree = "<group>"; };
 		2052E6803097DFF8032DE202 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		12308B7286E6A8C67DB7DA4A /* ApnsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApnsService.swift; sourceTree = "<group>"; };
 		AD8FE6F4409ABA226995E31D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
 		E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; };
 		65DC653B3D2AC8A7EB6F881D /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
+		75FBF58C58B8041CB8E00F20 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = "<group>"; };
 		49819CC4F1A616E422B369EF /* libisc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -72,6 +77,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"$SRCROOT/Scripts/xcode-bundle-runtimes.sh\"\n";
+		};
+		1D5A8C77629982CCE531CA4F /* Bundle AP Library */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle AP Library";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/xcode-bundle-ap.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -113,13 +137,23 @@
 			isa = PBXGroup;
 			children = (
 				65DC653B3D2AC8A7EB6F881D /* Package.swift */,
+				75FBF58C58B8041CB8E00F20 /* Release.xcconfig */,
 				1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */,
 				E5C7E46CD93DD4B69A6F8AAB /* Phecda */,
+				E577FA8E4DB51C34741DD382 /* CAp */,
 				49819CC4F1A616E422B369EF /* libisc.dylib */,
 				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
 				E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */,
 				31A5E41A9BD04E385DB196E5 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		E577FA8E4DB51C34741DD382 /* CAp */ = {
+			isa = PBXGroup;
+			children = (
+				12308B7286E6A8C67DB7DA4A /* ApnsService.swift */,
+			);
+			path = Sources/CAp;
 			sourceTree = "<group>";
 		};
 		E5C7E46CD93DD4B69A6F8AAB /* Phecda */ = {
@@ -133,6 +167,7 @@
 				FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */,
 				6BF6775A1F7CFB3484375333 /* JobsView.swift */,
 				6816ACB6F965A41156ABDF31 /* Localization.swift */,
+				82505F9DFC42916F93396B73 /* LogExport.swift */,
 				4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */,
 				5B812F00D383CCC66E219043 /* NewServiceView.swift */,
 				22C1B1E16167E90D15542DF5 /* OnboardingView.swift */,
@@ -165,6 +200,7 @@
 				483A0E0C9C74F0CBD6A612E6 /* Resources */,
 				D5AA43824C573FD487CF953E /* Bundle Runtimes */,
 				1E3DE5A8EB987F45C2E2B691 /* Embed Libraries */,
+				1D5A8C77629982CCE531CA4F /* Bundle AP Library */,
 			);
 			buildRules = (
 			);
@@ -240,6 +276,7 @@
 				15266CCE1D5FF62B90091003 /* ISCPhecdaApp.swift in Sources */,
 				AE58EA9CCFCF714F2971CB25 /* JobsView.swift in Sources */,
 				96ACDBFBF2FEBCE0FB6BF26E /* Localization.swift in Sources */,
+				AC4A5FCFC6FEBCDEE531FAC6 /* LogExport.swift in Sources */,
 				372C0914F967F55F112CA338 /* MenuBarPanelView.swift in Sources */,
 				82A94A24F2C5CAC2DD2C89EB /* NewServiceView.swift in Sources */,
 				A4D262DD21B9CC748D235643 /* OnboardingView.swift in Sources */,
@@ -247,6 +284,7 @@
 				E5C2186E8F621B83B7CED5DD /* RootView.swift in Sources */,
 				91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */,
 				49E90B00956BD92C98B608D1 /* SettingsView.swift in Sources */,
+				C5D31064CAECF957F16DBDCD /* ApnsService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -343,6 +381,12 @@
 		};
 		0CDA8280A8A8625F064950EC /* Release */ = {
 			isa = XCBuildConfiguration;
+			// Release 的基底配置。它内部用 `#include?` 可选地把 Vendor/AP 里的
+			// 链接设置拉进来 —— 库不在时那一行静默跳过，于是这个构建与
+			// "从 GitHub 拿源码自编译"的形态完全一致：没有推送能力，照样能构建。
+			//
+			// Debug **不挂**它：日常开发不需要这个闭源库，也不该被它挡住。
+			baseConfigurationReference = 75FBF58C58B8041CB8E00F20 /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Phecda.entitlements;

@@ -1,0 +1,5 @@
+module CAp [system] {
+    header "libiscap.h"
+    link "iscap"
+    export *
+}

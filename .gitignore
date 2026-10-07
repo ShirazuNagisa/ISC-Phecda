@@ -8,3 +8,15 @@ xcuserdata/
 !.swiftpm/xcode/xcshareddata/
 !.swiftpm/xcode/xcshareddata/xcschemes/
 !.swiftpm/xcode/xcshareddata/xcschemes/ISC-Package.xcscheme
+
+# 闭源推送库的产物（见 Vendor/AP/README.md）。
+#
+# Vendor/AP 里的 module.modulemap 与 README 进 git —— 那只是 ABI 的形状，
+# 没有库时编译器根本发现不了这个 module。其余四样不进：它们是闭源库本体、
+# 它的头文件、摘要表与链接设置，而这个仓库是公开的。
+#
+# 内核库（Vendor/ISC）不适用这一条：它由开源仓库编出来，谁都能自己重新编一份。
+Vendor/AP/*.dylib
+Vendor/AP/*.h
+Vendor/AP/SHA256SUMS
+Vendor/AP/*.xcconfig

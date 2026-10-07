@@ -15,6 +15,14 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / "Apps" / "Phecda"
+# 推送桥（闭源库 libiscap 的可选入口）。
+#
+# 它在 Sources/ 下，却**不是** SwiftPM 的 target —— 理由写在那个文件的开头：
+# 能不能 `import CAp` 取决于**应用 target** 的编译标志（Release 才由
+# Configs/Release.xcconfig 可选地给出来），而 SwiftPM 的 target 有自己的
+# 一套标志，应用的设置传不进去。
+BRIDGE = ROOT / "Sources" / "CAp"
+
 
 def uid(*parts: str) -> str:
     """确定性的 24 位十六进制 UUID。
@@ -24,10 +32,29 @@ def uid(*parts: str) -> str:
     """
     return hashlib.sha1("|".join(parts).encode()).hexdigest()[:24].upper()
 
+
+def source_entry(key: str, name: str) -> tuple[str, str]:
+    """一个 .swift 文件的（PBXFileReference, PBXBuildFile）两行。
+
+    key 只用来算 UUID，name 才是显示与路径。两者分开是为了让
+    Sources/CAp 下的文件与 Apps/Phecda 下的同名文件不会撞 UUID。
+    """
+    fr, bf = uid("fileref", key), uid("buildfile", key)
+    return (
+        f'\t\t{fr} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = '
+        f'sourcecode.swift; path = {name}; sourceTree = "<group>"; }};',
+        f'\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};',
+    )
+
+
 def main() -> int:
     swift_files = sorted(p.name for p in APP.glob("*.swift"))
     if not swift_files:
         print(f"❌ 在 {APP} 下没找到任何 .swift", file=sys.stderr)
+        return 1
+    bridge_files = sorted(p.name for p in BRIDGE.glob("*.swift"))
+    if not bridge_files:
+        print(f"❌ 在 {BRIDGE} 下没找到任何 .swift", file=sys.stderr)
         return 1
 
     prod = uid("product", "Phecda")
@@ -39,6 +66,7 @@ def main() -> int:
     src_phase = uid("phase", "sources")
     embed_phase = uid("phase", "embed")
     runtimes_phase = uid("phase", "runtimes")
+    ap_phase = uid("phase", "ap")
     dylib_fr = uid("fileref", "libisc")
     dylib_bf = uid("buildfile", "libisc")
     res_phase = uid("phase", "resources")
@@ -46,14 +74,15 @@ def main() -> int:
     cfg_list_prj = uid("cfglist", "project")
     cfg_list_tgt = uid("cfglist", "target")
 
+    # 应用 target 编译两组源文件：界面（Apps/Phecda）与推送桥（Sources/CAp）。
     file_refs, build_files = [], []
     for name in swift_files:
-        fr, bf = uid("fileref", name), uid("buildfile", name)
-        file_refs.append(
-            f'\t\t{fr} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = '
-            f'sourcecode.swift; path = {name}; sourceTree = "<group>"; }};')
-        build_files.append(
-            f'\t\t{bf} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {fr} /* {name} */; }};')
+        file_refs.append(source_entry(name, name)[0])
+        build_files.append(source_entry(name, name)[1])
+    for name in bridge_files:
+        key = f"CAp/{name}"
+        file_refs.append(source_entry(key, name)[0])
+        build_files.append(source_entry(key, name)[1])
 
     assets_fr, assets_bf = uid("fileref", "Assets"), uid("buildfile", "Assets")
     privacy_fr, privacy_bf = uid("fileref", "PrivacyInfo"), uid("buildfile", "PrivacyInfo")
@@ -63,11 +92,19 @@ def main() -> int:
     pkg_dep = uid("pkgdep", "ISCCore")
     pkg_ref = uid("pkgref", "local")
     pkg_bf = uid("buildfile", "ISCCore")
+    # Release 配置的基底。它内部用 `#include?` 可选地拉进 Vendor/AP 里的
+    # 链接设置 —— 所以工程文件里没有任何指向闭源库的静态引用。
+    ap_cfg_fr = uid("fileref", "Configs/Release.xcconfig")
+    bridge_group = uid("group", "Sources/CAp")
 
-    swift_names = "\n".join(f'\t\t\t\t{uid("buildfile", n)} /* {n} in Sources */,' for n in swift_files)
+    swift_names = "\n".join(
+        f'\t\t\t\t{uid("buildfile", key)} /* {name} in Sources */,'
+        for key, name in [(n, n) for n in swift_files] + [(f"CAp/{n}", n) for n in bridge_files])
     fileref_lines = "\n".join(file_refs)
     buildfile_lines = "\n".join(build_files)
     group_children = "\n".join(f'\t\t\t\t{uid("fileref", n)} /* {n} */,' for n in swift_files)
+    bridge_children = "\n".join(
+        f'\t\t\t\t{uid("fileref", f"CAp/{n}")} /* {n} */,' for n in bridge_files)
 
     pbx = f'''// !$*UTF8*$!
 {{
@@ -93,6 +130,7 @@ def main() -> int:
 \t\t{plist_fr} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; }};
 \t\t{entitlements_fr} /* Phecda.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; }};
 \t\t{pkg_fr} /* Package.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; }};
+\t\t{ap_cfg_fr} /* Release.xcconfig */ = {{isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = "<group>"; }};
 \t\t{dylib_fr} /* libisc.dylib */ = {{isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; }};
 /* End PBXFileReference section */
 
@@ -115,6 +153,25 @@ def main() -> int:
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t\tshellPath = /bin/sh;
 \t\t\tshellScript = "\\"$SRCROOT/Scripts/xcode-bundle-runtimes.sh\\"\\n";
+\t\t}};
+\t\t{ap_phase} /* Bundle AP Library */ = {{
+\t\t\tisa = PBXShellScriptBuildPhase;
+\t\t\talwaysOutOfDate = 1;
+\t\t\tbuildActionMask = 2147483647;
+\t\t\tfiles = (
+\t\t\t);
+\t\t\tinputFileListPaths = (
+\t\t\t);
+\t\t\tinputPaths = (
+\t\t\t);
+\t\t\tname = "Bundle AP Library";
+\t\t\toutputFileListPaths = (
+\t\t\t);
+\t\t\toutputPaths = (
+\t\t\t);
+\t\t\trunOnlyForDeploymentPostprocessing = 0;
+\t\t\tshellPath = /bin/sh;
+\t\t\tshellScript = "\\"$SRCROOT/Scripts/xcode-bundle-ap.sh\\"\\n";
 \t\t}};
 /* End PBXShellScriptBuildPhase section */
 
@@ -156,13 +213,23 @@ def main() -> int:
 \t\t\tisa = PBXGroup;
 \t\t\tchildren = (
 \t\t\t\t{pkg_fr} /* Package.swift */,
+\t\t\t\t{ap_cfg_fr} /* Release.xcconfig */,
 \t\t\t\t{privacy_fr} /* PrivacyInfo.xcprivacy */,
 \t\t\t\t{app_group} /* Phecda */,
+\t\t\t\t{bridge_group} /* CAp */,
 \t\t\t\t{dylib_fr} /* libisc.dylib */,
 \t\t\t\t{plist_fr} /* Info.plist */,
 \t\t\t\t{entitlements_fr} /* Phecda.entitlements */,
 \t\t\t\t{products_group} /* Products */,
 \t\t\t);
+\t\t\tsourceTree = "<group>";
+\t\t}};
+\t\t{bridge_group} /* CAp */ = {{
+\t\t\tisa = PBXGroup;
+\t\t\tchildren = (
+{bridge_children}
+\t\t\t);
+\t\t\tpath = Sources/CAp;
 \t\t\tsourceTree = "<group>";
 \t\t}};
 \t\t{app_group} /* Phecda */ = {{
@@ -194,6 +261,7 @@ def main() -> int:
 \t\t\t\t{res_phase} /* Resources */,
 \t\t\t\t{runtimes_phase} /* Bundle Runtimes */,
 \t\t\t\t{embed_phase} /* Embed Libraries */,
+\t\t\t\t{ap_phase} /* Bundle AP Library */,
 \t\t\t);
 \t\t\tbuildRules = (
 \t\t\t);
@@ -358,6 +426,12 @@ def main() -> int:
 \t\t}};
 \t\t{uid("cfg", "tgt", "release")} /* Release */ = {{
 \t\t\tisa = XCBuildConfiguration;
+\t\t\t// Release 的基底配置。它内部用 `#include?` 可选地把 Vendor/AP 里的
+\t\t\t// 链接设置拉进来 —— 库不在时那一行静默跳过，于是这个构建与
+\t\t\t// "从 GitHub 拿源码自编译"的形态完全一致：没有推送能力，照样能构建。
+\t\t\t//
+\t\t\t// Debug **不挂**它：日常开发不需要这个闭源库，也不该被它挡住。
+\t\t\tbaseConfigurationReference = {ap_cfg_fr} /* Release.xcconfig */;
 \t\t\tbuildSettings = {{
 \t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;

@@ -31,12 +31,12 @@ struct DDNSTaskListView: View {
 
             if model.credentials.isEmpty {
                 EmptyHint(symbol: "key",
-                          title: tr("先添加一个 DNS 凭据", "Add a DNS credential first"),
-                          message: tr("动态解析要用凭据去改你的 DNS 记录。",
+                          title: tr("先添加一个 DNS 服务商", "Add a DNS credential first"),
+                          message: tr("动态解析要用服务商去改你的 DNS 记录。",
                                       "Dynamic DNS needs a credential to change your records."))
             } else if dynamicCredentials.isEmpty {
                 EmptyHint(symbol: "exclamationmark.triangle",
-                          title: tr("没有可用于动态解析的凭据", "No credential can do dynamic DNS"),
+                          title: tr("没有可用于动态解析的服务商", "No credential can do dynamic DNS"),
                           message: tr("当前凭据的服务商不支持修改记录。", "Your providers do not support changing records."))
             } else if model.ddnsTasks.isEmpty {
                 EmptyHint(symbol: "arrow.triangle.2.circlepath",
@@ -214,7 +214,7 @@ struct DDNSTaskFormView: View {
                         TextField(tr("例如：家里的 IPv6", "e.g. Home IPv6"), text: $label)
                             .textFieldStyle(.roundedBorder)
                     }
-                    labeled(tr("凭据", "Credential")) {
+                    labeled(tr("服务商", "Provider")) {
                         Picker("", selection: $credentialID) {
                             Text(tr("请选择", "Select")).tag(String?.none)
                             ForEach(dynamicCredentials) { credential in

@@ -50,7 +50,6 @@ struct RootView: View {
                 }
             }
             Section {
-                kernelRow
                 if let settings = model.settings, settings.proxyEnabled == false {
                     Label(tr("反向代理未启用", "Reverse proxy off"), systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange)
@@ -71,17 +70,6 @@ struct RootView: View {
         .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
     }
 
-    @ViewBuilder private var kernelRow: some View {
-        HStack(spacing: 8) {
-            Circle().fill(kernelColor).frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(tr("内核", "Kernel")).font(.caption)
-                Text(kernelLabel).font(.caption2).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if model.isBusy { ProgressView().controlSize(.small) }
-        }
-    }
 
     private var kernelColor: Color {
         switch model.phase {

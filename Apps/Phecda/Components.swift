@@ -366,7 +366,7 @@ struct CredentialFieldsView: View {
                     .font(.caption).foregroundStyle(.orange)
             }
             if !provider.capabilities.canManageRecords {
-                Label(tr("该服务商不支持列区域或列记录，因此不能在这里管理解析条目。",
+                Label(tr("该服务商不支持列域名或列记录，因此不能在这里管理解析条目。",
                          "This provider cannot list zones or records, so records cannot be managed here."),
                       systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)

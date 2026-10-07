@@ -21,7 +21,6 @@ struct SettingsView: View {
     /// 隧道。开关与状态分开存：开关是用户的意图，状态是内核实际做到哪一步，
     /// 两者常常不一致（点了开但缺 cloudflared），而那个差值正是要显示的东西。
     @State private var proxyPort = ""
-    @State private var proxyTLS = true
     @State private var logLevel = "info"
 
     @State private var loaded = false
@@ -96,7 +95,7 @@ struct SettingsView: View {
             Text(tr("证书颁发机构需要它才能签发证书。", "The certificate authority requires it before issuing."))
                 .font(.caption2).foregroundStyle(.secondary)
 
-            labeled(tr("DNS 凭据", "DNS credential")) {
+            labeled(tr("DNS 服务商", "DNS provider")) {
                 Picker("", selection: $acmeCredentialID) {
                     // 默认就是**自动**。
                     //
@@ -114,14 +113,14 @@ struct SettingsView: View {
                 .labelsHidden()
             }
             Text(acmeCredentialID == nil
-                 ? tr("内核会按域名找出它属于哪个区域、那把凭据在哪。只有当自动匹配挑错时才需要手动指定。",
+                 ? tr("内核会按域名找出它属于哪个服务商。只有当自动匹配挑错时才需要手动指定。",
                       "The kernel finds which zone the domain belongs to and which credential owns it. Pick one manually only if automatic matching gets it wrong.")
-                 : tr("已手动指定：所有域名的 DNS-01 校验都会用这一把凭据。",
+                 : tr("已手动指定：所有域名的 DNS-01 校验都会用这一个服务商。",
                       "Manually pinned: DNS-01 for every domain will use this one credential."))
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if dnsCapableCredentials.isEmpty {
-                Text(tr("还没有能新建记录的凭据（DNS-01 需要写一条 TXT）。先去 DNS 页添加一个，例如 Cloudflare。",
+                Text(tr("还没有能新建记录的服务商（DNS-01 需要写一条 TXT）。先去 DNS 页添加一个，例如 Cloudflare。",
                         "No credential can create records yet (DNS-01 writes a TXT record). Add one in the DNS section, e.g. Cloudflare."))
                     .font(.caption2).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -153,8 +152,6 @@ struct SettingsView: View {
                     "Leave empty for the default (443 for HTTPS, 80 for HTTP)."))
                 .font(.caption2).foregroundStyle(.secondary)
 
-            Toggle(tr("为绑定的域名自动申请证书", "Request certificates for bound domains"), isOn: $proxyTLS)
-                .toggleStyle(.switch)
         }
     }
 
@@ -243,7 +240,6 @@ struct SettingsView: View {
             ? nil : settings.acmeDnsCredentialId
         proxyEnabled = settings.proxyEnabled ?? false
         proxyPort = (settings.proxyPort ?? 0) > 0 ? String(settings.proxyPort!) : ""
-        proxyTLS = settings.proxyTls ?? true
         logLevel = settings.logLevel ?? "info"
         loaded = true
     }

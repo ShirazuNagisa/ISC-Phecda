@@ -158,7 +158,6 @@ struct OnboardingView: View {
                           "Direct when this machine has a public address, via a Cloudflare relay when it does not."))
             }
 
-            kernelStatusCard
         }
     }
 
@@ -173,32 +172,6 @@ struct OnboardingView: View {
         }
     }
 
-    /// 内核状态。
-    ///
-    /// 放在第一页而不是等用户撞上"操作不可用"：后面三页全都要内核，
-    /// 而他需要第一眼就知道前提成不成立。
-    private var kernelStatusCard: some View {
-        HStack(spacing: 8) {
-            Circle().fill(model.phase == .running ? .green : .orange).frame(width: 7, height: 7)
-            Text(kernelSummary).font(.caption)
-            Spacer(minLength: 0)
-            if let summary = model.ipStatus?.summary, summary != "—" {
-                Text(summary).font(.caption2).monospacedDigit().foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 8))
-    }
-
-    private var kernelSummary: String {
-        switch model.phase {
-        case .running: return tr("内核运行中", "Kernel running")
-        case .starting: return tr("内核正在启动…", "Kernel starting…")
-        case .stopping: return tr("内核正在停止…", "Kernel stopping…")
-        case .failed: return model.errorMessage ?? tr("内核启动失败", "Kernel failed to start")
-        case .stopped: return tr("内核未运行", "Kernel not running")
-        }
-    }
 
     // MARK: - 第二页
 
@@ -231,7 +204,7 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if credentialSaved {
-                Label(tr("凭据已保存。", "Credential saved."), systemImage: "checkmark.circle.fill")
+                Label(tr("服务商已保存。", "Credential saved."), systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.green)
             }
         }

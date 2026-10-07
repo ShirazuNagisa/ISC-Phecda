@@ -223,7 +223,7 @@ struct JobsView: View {
         case "hosting.source_inspect": tr("识别源码", "Inspected a source folder")
         case "hosting.runtime_provision": tr("准备运行时", "Provisioned a runtime")
         case "hosting.runtime_remove": tr("删除运行时", "Removed a runtime")
-        case "credential.create", "credential.update": tr("修改凭据", "Changed a credential")
+        case "credential.create", "credential.update": tr("修改服务商", "Changed a credential")
         case "proxy.routes": tr("修改转发规则", "Changed proxy routes")
         case "cert.renew": tr("续期证书", "Renewed a certificate")
         default: action

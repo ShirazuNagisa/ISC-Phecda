@@ -273,7 +273,7 @@ struct RemoteView: View {
                 GridRow {
                     Text(tr("挂在域名下", "Under domain")).foregroundStyle(.secondary)
                     if publicDomains.isEmpty {
-                        Text(tr("还没有能建记录的域名，先去 DNS 页添加一个凭据",
+                        Text(tr("还没有能建记录的域名，先去 DNS 页添加一个服务商",
                                 "No domain can host records yet — add a credential in the DNS section"))
                             .font(.caption).foregroundStyle(.orange)
                     } else {

@@ -79,7 +79,7 @@ struct DNSView: View {
 
     private var pickers: some View {
         HStack(spacing: 14) {
-            Picker(tr("凭据", "Credential"), selection: $credentialID) {
+            Picker(tr("服务商", "Provider"), selection: $credentialID) {
                 Text(tr("请选择", "Select")).tag(String?.none)
                 ForEach(model.credentials) { credential in
                     Text("\(credential.label) · \(credential.provider)").tag(String?.some(credential.id))
@@ -90,7 +90,7 @@ struct DNSView: View {
             // 标签显示区域名（用户认的是名字），值用区域 ID ——
             // 契约里的路径参数是 zoneId，而 Cloudflare 这类服务商
             // 只认 ID，把名字当 ID 发过去会得到一条看不懂的上游 404。
-            Picker(tr("区域", "Zone"), selection: $zone) {
+            Picker(tr("域名", "Domain"), selection: $zone) {
                 Text(tr("请选择", "Select")).tag(String?.none)
                 ForEach(zones) { item in
                     Text(item.name).tag(String?.some(item.id))
@@ -115,10 +115,10 @@ struct DNSView: View {
     @ViewBuilder private var content: some View {
         if model.credentials.isEmpty {
             EmptyHint(symbol: "key",
-                      title: tr("还没有 DNS 凭据", "No DNS credential yet"),
-                      message: tr("添加一个 DNS 服务商的凭据，才能管理解析与签发证书。",
+                      title: tr("还没有 DNS 服务商", "No DNS credential yet"),
+                      message: tr("添加一个 DNS 服务商，才能管理解析与签发证书。",
                                   "Add a DNS provider credential to manage records and issue certificates."),
-                      action: (tr("添加凭据", "Add a credential"), { model.requestedSheet = .credentials }))
+                      action: (tr("添加服务商", "Add a credential"), { model.requestedSheet = .credentials }))
         } else if let failure {
             EmptyHint(symbol: "exclamationmark.triangle",
                       title: tr("读取失败", "Could not load"),
@@ -126,11 +126,11 @@ struct DNSView: View {
                       action: (tr("重试", "Try again"), { Task { await loadZones() } }))
         } else if zone == nil {
             EmptyHint(symbol: "globe",
-                      title: tr("选择一个区域", "Pick a zone"),
-                      message: tr("先选凭据，再选要管理的域名区域。", "Choose a credential, then the zone to manage."))
+                      title: tr("选择一个域名", "Pick a domain"),
+                      message: tr("先选服务商，再选要管理的域名。", "Choose a credential, then the zone to manage."))
         } else if records.isEmpty && !loading {
             EmptyHint(symbol: "tray",
-                      title: tr("这个区域还没有解析条目", "No records in this zone"),
+                      title: tr("这个域名还没有解析条目", "No records in this zone"),
                       message: tr("点右上角添加一条。", "Use the button above to add one."),
                       action: (tr("添加解析", "Add record"), { showingAdd = true }))
         } else {

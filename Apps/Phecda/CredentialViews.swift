@@ -34,10 +34,10 @@ struct CredentialListView: View {
 
             if model.credentials.isEmpty {
                 EmptyHint(symbol: "key",
-                          title: tr("还没有凭据", "No credentials yet"),
-                          message: tr("添加一个 DNS 服务商的凭据之后，才能管理解析并签发证书。",
+                          title: tr("还没有服务商", "No credentials yet"),
+                          message: tr("添加一个 DNS 服务商之后，才能管理解析并签发证书。",
                                       "Add a DNS provider credential to manage records and issue certificates."),
-                          action: (tr("添加凭据", "Add a credential"), { showingAdd = true }))
+                          action: (tr("添加服务商", "Add a credential"), { showingAdd = true }))
             } else {
                 ScrollView {
                     VStack(spacing: 8) {
@@ -175,7 +175,7 @@ struct CredentialFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(tr("添加 DNS 凭据", "Add a DNS credential")).font(.headline).padding(20)
+            Text(tr("添加 DNS 服务商", "Add a DNS credential")).font(.headline).padding(20)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {

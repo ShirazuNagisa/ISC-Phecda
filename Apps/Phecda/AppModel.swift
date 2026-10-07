@@ -93,6 +93,60 @@ enum AppSection: String, CaseIterable, Identifiable {
     var jobs: [JobInfo] = []
     var events: [JSONValue] = []
 
+    // MARK: DNS 页缓存
+
+    /// DNS 页三层数据（服务商 → 域名 → 解析条目）的缓存，以及这一页的选中项。
+    ///
+    /// # 为什么放在模型里
+    ///
+    /// `RootView` 的 detail 是一个 switch：离开 DNS 页时那个视图会被整个丢掉，
+    /// 它的 @State 跟着一起没。于是"每次切回来都重新问一遍内核"——用户看到的
+    /// 就是点什么都要等。缓存在模型里，切回来时先用旧数据把界面填满，再在
+    /// 后台悄悄刷新。
+    ///
+    /// 选中项（服务商、域名）同样放在这里：它决定缓存里的哪一份被显示，
+    /// 也决定后台该刷新哪一份。
+    var dnsCredentialID: String?
+    var dnsZoneID: String?
+
+    /// 按服务商 id 缓存域名列表。
+    var dnsZones: [String: [DNSZone]] = [:]
+
+    /// 按「服务商 id + 域名 id」缓存解析条目。
+    ///
+    /// 键里带服务商：域名 id 由服务商给出（Cloudflare 是它的 zone id），
+    /// 两个服务商下同名域名的 id 并不保证不同。
+    var dnsRecords: [String: [DNSRecord]] = [:]
+
+    /// 最近一次读取失败的原因。
+    ///
+    /// 它**不**清空任何缓存：有旧数据时界面照旧显示旧数据，只在旁边提一句 ——
+    /// 一次网络抖动不该让屏幕上的清单凭空消失。
+    var dnsFailure: String?
+
+    /// 是否有一次"界面在等结果"的读取在跑（首次进页、换服务商/域名）。
+    ///
+    /// 后台的定期刷新**不**置它：否则那个小转圈每 5 分钟闪一次，而屏幕上
+    /// 的数据其实一直是有的。
+    var dnsLoading = false
+
+    /// 后台刷新周期（秒）。
+    ///
+    /// 5 分钟是一个权衡：解析条目变得不快（改一条也就改一条），而每轮要打
+    /// 三个请求 —— 更勤没有意义；再慢则用户改完回来看见的还是旧的。固定值
+    /// 还让"这些数据有多旧"变得可预期。
+    private static let dnsRefreshInterval: TimeInterval = 300
+
+    /// 最近一次**完整成功**的读取时间；失败不更新它，这样下一次进页面会
+    /// 立刻再试一次，而不是干等一个周期。
+    private var dnsLastRefresh: Date?
+
+    /// 正在跑的那一轮读取。它的存在让重复调用不会叠加成多轮请求。
+    private var dnsRefreshTask: Task<Void, Never>?
+
+    /// 定期刷新的循环。由 DNS 页起步（见 `beginDNSPolling`），内核停止时结束。
+    private var dnsPollTask: Task<Void, Never>?
+
     // MARK: 远程访问
 
     var remoteStatus: RemoteStatus?
@@ -241,6 +295,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         eventTask?.cancel(); eventTask = nil
         metricsTask?.cancel(); metricsTask = nil
         refreshTask?.cancel(); refreshTask = nil
+        dnsPollTask?.cancel(); dnsPollTask = nil
         do {
             _ = try await kernel.stop()
             phase = .stopped
@@ -255,6 +310,11 @@ enum AppSection: String, CaseIterable, Identifiable {
         apps = []; runtimes = []; metrics = nil; advisories = []; reachability = [:]
         routes = []; certificates = []; ddnsTasks = []; credentials = []; ipStatus = nil
         jobs = []; events = []; settings = nil; providers = []
+        // DNS 页的缓存跟着内核一起作废：内核重启后是另一个实例，旧的域名与
+        // 解析条目不该继续装作有效。选中的服务商留着 —— 它只是一个 id，
+        // 下一次读取时会重新校验，用户回来后还是原来那个。
+        dnsZones = [:]; dnsRecords = [:]; dnsFailure = nil; dnsZoneID = nil
+        dnsLastRefresh = nil
     }
 
     // MARK: 刷新
@@ -376,6 +436,229 @@ enum AppSection: String, CaseIterable, Identifiable {
                 await self.refreshMetrics()
                 try? await Task.sleep(for: .seconds(3))
             }
+        }
+    }
+
+    // MARK: DNS 页：缓存
+
+    /// 当前选中服务商下的域名缓存；nil 表示还没读到过。
+    ///
+    /// 「还没读到」和「读到了空列表」在界面上是两句不同的话，所以这里
+    /// 用可选值而不是空数组把两者分开。
+    var currentDNSZones: [DNSZone]? {
+        guard let dnsCredentialID else { return nil }
+        return dnsZones[dnsCredentialID]
+    }
+
+    /// 当前选中域名下的解析条目缓存；nil 表示还没读到过。
+    var currentDNSRecords: [DNSRecord]? {
+        guard let dnsCredentialID, let dnsZoneID else { return nil }
+        return dnsRecords[Self.dnsCacheKey(credentialID: dnsCredentialID, zoneID: dnsZoneID)]
+    }
+
+    /// 当前选中域名的显示名。界面上给用户看名字，接口要的是 id。
+    var dnsZoneLabel: String {
+        guard let dnsZoneID else { return "" }
+        return currentDNSZones?.first { $0.id == dnsZoneID }?.name ?? dnsZoneID
+    }
+
+    /// 缓存键。用 "/" 拼：服务商给的域名 id 是 UUID 或域名本身，不含它。
+    private static func dnsCacheKey(credentialID: String, zoneID: String) -> String {
+        "\(credentialID)/\(zoneID)"
+    }
+
+    /// 当前选择对应的数据在缓存里齐了没有。
+    private var dnsCacheIsComplete: Bool {
+        // 一个服务商都没有时"缺"的是用户还没添加，不是数据没读到 ——
+        // 这种情况不该每次进页面都去问一遍内核。
+        guard !credentials.isEmpty else { return true }
+        guard let credentialID = dnsCredentialID, let zones = dnsZones[credentialID] else { return false }
+        // 这个服务商名下确实一个域名都没有：没有解析条目可读，也算齐了。
+        guard let zoneID = dnsZoneID, zones.contains(where: { $0.id == zoneID }) else { return true }
+        return dnsRecords[Self.dnsCacheKey(credentialID: credentialID, zoneID: zoneID)] != nil
+    }
+
+    /// 缓存是否已经过了刷新周期。
+    private var dnsCacheIsFresh: Bool {
+        guard let dnsLastRefresh else { return false }
+        return Date().timeIntervalSince(dnsLastRefresh) < Self.dnsRefreshInterval
+    }
+
+    /// 进入 DNS 页时调用：有缓存就用缓存，缺什么才去内核取什么。
+    ///
+    /// 这是"切页不重新拉取"的落点：5 分钟内来回切页面，这里一次请求都不发，
+    /// 界面直接拿缓存渲染。
+    ///
+    /// 幂等：重复调用（视图重建、切页回来）不会多出请求，也不会覆盖用户
+    /// 已经选好的服务商与域名。
+    func prepareDNS() async {
+        guard running else { return }
+        normalizeDNSSelection()
+        if !dnsCacheIsComplete {
+            // 首次进页、或刚换过服务商：这一步要等，转圈是应该的。
+            await refreshDNS(visible: true)
+            return
+        }
+        guard !dnsCacheIsFresh else { return }
+        // 缓存齐全但已经过期（离开很久、或上一次读失败过）：界面照旧立刻
+        // 渲染缓存，这一轮在后台跑，不挡任何操作。
+        await refreshDNS()
+    }
+
+    /// 用户换了服务商或域名之后调用：让缓存满足新的选择。
+    ///
+    /// 幂等：新的选择已经有缓存时它什么都不做 —— 这也是来回切服务商、
+    /// 切域名时不重新拉取的原因。
+    ///
+    /// 它**不替用户挑服务商**：在服务商那一栏选"请选择"就是不选，页面会
+    /// 说明该做什么；替用户挑回来只会让选择器自己弹回去。域名的默认选择
+    /// 与内核那边一致（第一个），否则换个服务商就得多点一次。
+    func syncDNSCache() async {
+        guard running, let credentialID = dnsCredentialID else { return }
+        guard let zones = dnsZones[credentialID] else {
+            // 这个服务商的域名还没读过。域名选择属于上一个服务商，先清掉，
+            // 读完由 performDNSLoad 选第一个。
+            dnsZoneID = nil
+            await refreshDNS(visible: true)
+            return
+        }
+        // 选中的域名不在这个服务商名下（刚换服务商、或在服务商那边删掉了）
+        // 时退回第一个，否则界面会指着一个取不到数据的域名。
+        if let zoneID = dnsZoneID, !zones.contains(where: { $0.id == zoneID }) {
+            dnsZoneID = nil
+        }
+        if dnsZoneID == nil { dnsZoneID = zones.first?.id }
+        guard let zoneID = dnsZoneID else { return }
+        guard dnsRecords[Self.dnsCacheKey(credentialID: credentialID, zoneID: zoneID)] == nil else { return }
+        await refreshDNS(visible: true)
+    }
+
+    /// 读一遍当前选择对应的数据：服务商列表、域名列表、解析条目。
+    ///
+    /// 每一项各自容错并**保留旧值**：一次网络抖动不该让界面上的清单消失，
+    /// 用户该看到的是一句"这次没读到"，而不是整页变空。
+    ///
+    /// 幂等：同一时刻只有一轮请求在跑。已经有一轮时先等它结束 —— 它刷的
+    /// 可能是切换前的选择，所以等完还要按现在的选择再跑一轮。
+    func refreshDNS(visible: Bool = false) async {
+        guard running else { return }
+        if visible { dnsLoading = true }
+        defer { if visible { dnsLoading = false } }
+        if let inflight = dnsRefreshTask { await inflight.value }
+        guard running else { return }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performDNSLoad()
+        }
+        dnsRefreshTask = task
+        await task.value
+        // 只在还是自己那一轮时清句柄：等待期间可能有另一轮已经接手。
+        if dnsRefreshTask == task { dnsRefreshTask = nil }
+    }
+
+    /// 真正打内核的那一轮。所有写入缓存的地方都收在这里，界面只读缓存。
+    private func performDNSLoad() async {
+        let generation = lifecycleGeneration
+
+        // 服务商列表跟着一起读：它是 DNS 页的第一层选择，在别处被删掉之后
+        // 这一页必须能发现，否则会一直指着一个不存在的 id 反复报错。
+        if let loaded: [CredentialInfo] = await attempt({ try await self.kernel.credentials() }) {
+            credentials = loaded
+        }
+        normalizeDNSSelection()
+
+        guard let credentialID = dnsCredentialID else {
+            guard generation == lifecycleGeneration else { return }
+            dnsFailure = nil
+            dnsLastRefresh = Date()
+            return
+        }
+
+        var failure: String?
+        do {
+            let loaded = try await kernel.zones(credentialID: credentialID)
+            dnsZones[credentialID] = loaded
+            if dnsZoneID == nil || !loaded.contains(where: { $0.id == dnsZoneID }) {
+                dnsZoneID = loaded.first?.id
+            }
+        } catch {
+            // 保留上一次读到的域名列表：它是用户继续操作的依据。
+            failure = error.localizedDescription
+        }
+
+        if let zoneID = dnsZoneID {
+            do {
+                let loaded = try await kernel.records(credentialID: credentialID, zone: zoneID)
+                dnsRecords[Self.dnsCacheKey(credentialID: credentialID, zoneID: zoneID)] = loaded
+            } catch {
+                // 域名列表的错误更靠上（用户得先把域名选对），优先显示它。
+                if failure == nil { failure = error.localizedDescription }
+            }
+        }
+
+        guard generation == lifecycleGeneration else { return }
+        dnsFailure = failure
+        if failure == nil { dnsLastRefresh = Date() }
+    }
+
+    /// 让选中的服务商与域名同凭据列表、缓存对齐。
+    ///
+    /// 只做**本地**判断，不发请求：选中项在别处被删掉时退回第一个，
+    /// 而不是拿着一个不存在的 id 反复报错。
+    private func normalizeDNSSelection() {
+        // 凭据列表为空时不动选择：那表示还没读到，不是用户真的删光了。
+        if !credentials.isEmpty,
+           let current = dnsCredentialID, !credentials.contains(where: { $0.id == current }) {
+            dnsCredentialID = credentials.first?.id
+            dnsZoneID = nil
+        }
+        if dnsCredentialID == nil { dnsCredentialID = credentials.first?.id }
+        guard let credentialID = dnsCredentialID, let zones = dnsZones[credentialID], !zones.isEmpty else { return }
+        if dnsZoneID == nil || !zones.contains(where: { $0.id == dnsZoneID }) {
+            dnsZoneID = zones.first?.id
+        }
+    }
+
+    /// 开始定期刷新 DNS 缓存。
+    ///
+    /// 由 DNS 页在出现时起步，而不是内核一起来就跑：没人打开过这一页时，
+    /// 每 5 分钟打三个请求没有意义。起来之后它一直跑到内核停止 —— 这样
+    /// 用户离开再回来时，缓存里的东西正好是新的。
+    ///
+    /// 幂等：已经在跑、或内核没在跑，都不重开第二个循环。
+    func beginDNSPolling() {
+        guard running, dnsPollTask == nil else { return }
+        dnsPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Self.dnsRefreshInterval))
+                guard let self, !Task.isCancelled, self.running else { return }
+                // 有人正在读时跳过这一轮：撞上去的代价是同一份数据请求两遍，
+                // 而错过一轮的代价只是晚 5 分钟。
+                if self.dnsRefreshTask == nil { await self.refreshDNS() }
+            }
+        }
+    }
+
+    // MARK: DNS 页：远程子域名
+
+    /// DNS 页最下面那条展开条要显示的地址：Phecda 给 Mizar 用的用户子域名。
+    ///
+    /// 它住在远程状态里（`public.host`）。这里按需补一次读取，而不是复用
+    /// `refreshAll()` —— 那个是十几个请求的全量刷新，而这一条只有用户展开
+    /// 那条时才看得见。
+    ///
+    /// 幂等：已经拿到过状态就不重复读；展开条每点一次不会多打一个请求。
+    func loadRemoteStatusIfNeeded() async {
+        guard remoteStatus == nil else { return }
+        await refreshRemoteStatus()
+    }
+
+    /// 重新读一次远程状态。给展开条上的"重新读取"用：用户刚在「远程访问」
+    /// 页开过公网访问时，需要能立刻在这里看到子域名。
+    func refreshRemoteStatus() async {
+        guard running else { return }
+        if let status: RemoteStatus = await attempt({ try await self.kernel.remoteStatus() }) {
+            remoteStatus = status
         }
     }
 

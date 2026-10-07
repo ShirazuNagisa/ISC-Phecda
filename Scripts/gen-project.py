@@ -88,6 +88,10 @@ def main() -> int:
     privacy_fr, privacy_bf = uid("fileref", "PrivacyInfo"), uid("buildfile", "PrivacyInfo")
     plist_fr = uid("fileref", "Info.plist")
     entitlements_fr = uid("fileref", "Phecda.entitlements")
+    # 上架版用的那份（带沙箱）。它**不在**任何配置的 CODE_SIGN_ENTITLEMENTS
+    # 里 —— 归档时由 Scripts/archive.sh 显式覆盖选中。放进工程只为能在
+    # Xcode 里看到它，避免"改了一份没被用到的文件"。
+    appstore_entitlements_fr = uid("fileref", "Phecda-AppStore.entitlements")
     pkg_fr = uid("fileref", "Package.swift")
     pkg_dep = uid("pkgdep", "ISCCore")
     pkg_ref = uid("pkgref", "local")
@@ -129,6 +133,7 @@ def main() -> int:
 \t\t{privacy_fr} /* PrivacyInfo.xcprivacy */ = {{isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; }};
 \t\t{plist_fr} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; }};
 \t\t{entitlements_fr} /* Phecda.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; }};
+\t\t{appstore_entitlements_fr} /* Phecda-AppStore.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Phecda-AppStore.entitlements"; sourceTree = "<group>"; }};
 \t\t{pkg_fr} /* Package.swift */ = {{isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; }};
 \t\t{ap_cfg_fr} /* Release.xcconfig */ = {{isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = "<group>"; }};
 \t\t{dylib_fr} /* libisc.dylib */ = {{isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; }};
@@ -220,6 +225,7 @@ def main() -> int:
 \t\t\t\t{dylib_fr} /* libisc.dylib */,
 \t\t\t\t{plist_fr} /* Info.plist */,
 \t\t\t\t{entitlements_fr} /* Phecda.entitlements */,
+\t\t\t\t{appstore_entitlements_fr} /* Phecda-AppStore.entitlements */,
 \t\t\t\t{products_group} /* Products */,
 \t\t\t);
 \t\t\tsourceTree = "<group>";
@@ -382,10 +388,13 @@ def main() -> int:
 \t\t\tbuildSettings = {{
 \t\t\t\tASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
-\t\t\t\t// Debug 用 ad-hoc：本机不一定有该团队的开发证书，而日常构建
-\t\t\t\t// 不该因为签名缺失而跑不起来。代价是**沙箱不生效**（ad-hoc 没有
-\t\t\t\t// Team ID），所以本机测不到沙箱行为 —— 这一条写在
-\t\t\t\t// Documentation/APPSTORE.md 里。
+\t\t\t\t// 这份 entitlement **没有沙箱**，这是刻意的：沙箱进程的
+\t\t\t\t// process-exec 只放行 /Applications 与系统目录，而本产品的核心
+\t\t\t\t// 就是在用户机器上跑用户的工具链（含项目目录里的 .bin）。
+\t\t\t\t// 上架那份走 Phecda-AppStore.entitlements，由 archive.sh 覆盖选中。
+\t\t\t\t//
+\t\t\t\t// Debug 另用 ad-hoc：本机不一定有该团队的开发证书，而日常构建
+\t\t\t\t// 不该因为签名缺失而跑不起来。
 \t\t\t\tCODE_SIGN_IDENTITY = "-";
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
 \t\t\t\t// 显式写团队，不让 Xcode 猜。

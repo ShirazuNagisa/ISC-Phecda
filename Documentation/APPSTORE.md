@@ -41,7 +41,7 @@ ISC-Core 的 111 个 Go 模块里没有传染性许可，唯一的 GPL 就是项
 - **再分发许可**：.NET 是 MIT，PHP/Python 是宽松许可；**Java 要确认用的是
   OpenJDK 构建**（Oracle JDK 的再分发条款不适用于随应用分发）。
 
-### 3. App Sandbox —— 工程问题，未解决
+### 3. App Sandbox —— 工程问题，已定方案（见下一节）
 
 Mac App Store 强制开启沙箱，而当前实现有若干处与之冲突：
 
@@ -50,6 +50,7 @@ Mac App Store 强制开启沙箱，而当前实现有若干处与之冲突：
 | 数据目录 `~/Library/Application Support/ISC Phecda` | **沙箱应用完全读不到这个路径** | 迁进容器；见下面的迁移问题 |
 | 反代监听 **443** | ✅ **实测可以**（见下） | 不需要改 |
 | 下载并执行解释器 | 违反 2.5.2 | 随包内置 |
+| **执行包内之外的任何二进制** | ❌ **EPERM**，连自己的容器也不行 | 运行时必须解压并签名后放进包内；见下一节 |
 | Java / .NET 的 JIT | 需要 `com.apple.security.cs.allow-jit` | 加 entitlement |
 | 加载 `libisc.dylib` | 与主程序不同签名的 dylib 需要 `disable-library-validation` | 加 entitlement（同一 Team 签名则不需要） |
 | 管理 DNS / ACME / 出站请求 | ✅ 只需 `network.client` | — |
@@ -59,6 +60,68 @@ Mac App Store 强制开启沙箱，而当前实现有若干处与之冲突：
 `~/Library/Application Support/ISC Phecda`。所以"自动迁移老用户的数据"做不到 ——
 要么让用户重新配置，要么先发一个非沙箱版本、由它把数据搬进容器，再发沙箱版本。
 后者是唯一平滑的路子，但意味着**两个版本要按顺序发布**。
+
+## 沙箱的真实边界：`process-exec` 只放行 `/Applications` 与系统目录
+
+这一条是**上架路线的分水岭**，而且它的报错完全看不出与沙箱有关，所以单独记。
+
+### 症状
+
+在沙箱构建里构建一个 Node 站点失败：
+
+```
+start npm: fork/exec /Users/…/Library/Containers/app.isc.phecda/Data/Library/
+Application Support/Phecda/runtimes/node/22.14.0/bin/npm: operation not permitted
+```
+
+`operation not permitted` 是 **EPERM on exec**，不是"找不到"（那是 ENOENT）、
+也不是权限位不对（那是 EACCES "permission denied"）。内核日志里的原话：
+
+```
+kernel: (Sandbox) Sandbox: T(13059) deny(1) process-exec* …/runtimes/node/22.14.0/bin/node
+```
+
+### 实测的放行名单（macOS 27，沙盒小程序逐个试）
+
+**同一个 node 二进制，只换位置：**
+
+| 位置 | 文件读 | 执行 |
+|---|---|---|
+| `/Applications/…/node`（连 bundle 都不是，普通目录也行） | ✅ | ✅ |
+| `/Applications/X.app/Contents/Resources/node` | ✅ | ✅ |
+| app **自己的容器**（`~/Library/Containers/<id>/Data/…`） | ✅ | ❌ EPERM |
+| `~/Documents`、`~/Library`、`~/Applications`、`/tmp` | ❌ | ❌ |
+| `/bin`、`/usr/bin`、`/System` | ✅ | ✅ |
+
+**签名与 team 都不是变量**：把 Apple 签名的 `/bin/echo` **复制**进容器，同样
+EPERM；把 Developer ID 签名的 node 放进 `/Applications`，就能执行。符号链接按
+**解析后的真实路径**判定（容器里的软链指向 `/Applications/…` 时执行成功）。
+
+所以这不是"把运行时装到对的位置"能绕开的：**沙盒应用只能执行系统目录与
+`/Applications` 子树里的东西，而它既不能写 `/Applications`（实测 EPERM），
+容器又不在名单里 —— 用户可写的位置里没有一个可以执行。**
+
+### 直接后果
+
+1. **"按需下载运行时再执行"与上架互斥。** 运行时必须以可执行文件的形态待在
+   应用包里（构建期解压 + 逐个签名，见 `Scripts/bundle-runtimes.sh`）。
+2. **项目里的可执行文件一律跑不起来。** `npm run <script>` 走 `sh -c`，sh 在
+   PATH 里找到 `node_modules/.bin/vite`（在**项目目录**里）再 execve → EPERM，
+   实测报 `exit 126 /usr/bin/env: bad interpreter: Operation not permitted`。
+   绕过 `.bin`、直接用 node 吃 JS 入口可以跑通。
+   → 上架版对 Node 项目的支持是**受限**的；PHP/Python 这类"解释器读脚本"的
+   用法不受影响（`php -S`、`python -m` 都正常）。
+3. **两份 entitlement 成了必需品**：直接分发版不带沙箱（否则功能全废），
+   上架版带沙箱。见 `Phecda.entitlements` / `Phecda-AppStore.entitlements`，
+   由 `Scripts/archive.sh` 在归档时切换。
+
+### 顺带纠正一条早先写错的结论
+
+本文档此前写过"Debug 构建的沙箱不生效（ad-hoc 没有 Team ID）"。**那是错的**：
+ad-hoc 签名 + `com.apple.security.app-sandbox` 的进程**照样进沙箱**（实测
+`HOME` 被重定向到容器）。早先判断"没进沙箱"是因为容器没建 —— 而容器要到
+进程真正访问 home 时才创建。
+
 
 ## 阶段 1 实测到的两件事（已修正一次误判）
 
@@ -208,17 +271,50 @@ rpath 引用，那条路在签名分发下走不通。
 
 计划里那条"确认 Java 是 OpenJDK 构建"**已经满足**，不需要换来源。
 
-**打包**：`Scripts/bundle-runtimes.sh` 把清单里指定的归档取回、校验摘要、放进
-`Contents/Resources/runtimes/`。**内置哪几个是脚本开头的一行**（默认
-`php python`）—— 那是打包决定，不是代码决定，内核一行都不用动。
+**打包**：`Scripts/bundle-runtimes.sh` 把清单里指定的归档取回、校验摘要、
+**解压**、**逐个签名**，放进 `Contents/Resources/runtimes/<kind>/<version>/`。
+**内置哪几个是脚本开头的一行**（默认 `php python node`）—— 那是打包决定，
+不是代码决定，内核一行都不用动。
 
-**已端到端验证**（2026-10-06）：
+为什么是"解压后放进去"而不是只放归档：见上一节 —— 内核原本的路径是
+"从包里取归档 → 解压到容器 → 执行"，而沙箱只允许执行 `/Applications` 与
+系统目录，最后一步必然 EPERM。归档解出来的二进制全都落在容器里。
 
-- 脚本取回 php 8.5.8、SHA-256 校验通过、落进包内 15,106,458 字节；
-- 内核启动后改报「运行时来源：应用包内置」；
-- 经 REST 触发一次真实安装，任务在**同一毫秒内**完成
-  （`created_at` 与 `finished_at` 相同）—— 15 MB 的下载不可能这么快，
-  证明它确实取自包内而非网络。
+**签名必须由这个脚本自己做**：entitlement 按进程生效、不继承，包内这些
+二进制是独立进程，应用那份管不到它们。用 `Configs/Runtime.entitlements`
+（`allow-jit`、`allow-unsigned-executable-memory`、`disable-library-validation`、
+`allow-dyld-environment-variables`）签。少了 `disable-library-validation`，
+`npm i sharp` 这类带原生扩展的安装会以"找不到模块"的形态失败 ——
+那个报错与签名毫无字面关系。
+
+**内核侧的取用路径**（Core，`internal/runtime`）：
+
+- `UseBundle(dir)` 声明位置，`resolveBundled` 直接使用包内那棵解压好的树
+  —— **不复制、不进容器**；判定标准只有一条：期望的可执行文件真的在那里。
+- 解析顺序是 **系统 → 包内 → 数据目录**。包内优先不只是偏好：直接分发版与
+  上架版共用同一个容器，用户先装直接分发版再换 App Store 版时，容器里会
+  留着上一个可读但**执行会 EPERM** 的副本，先取包内的才不会选中它。
+- `SetDownloader(nil)` 让这份构建**没有下载能力**，内置缺失时返回
+  `ErrNotBundled` 而不是悄悄去下载。
+
+**已端到端验证**（2026-10-07）：
+
+- 脚本取回 php 8.5.8 / cpython 3.13.16 / node 22.14.0，SHA-256 全部校验通过；
+- 解压后 php 43 MB、python 67 MB、node 176 MB，合计 **286 MB**；
+- 树上**穷尽扫描**出 12 个 Mach-O（1+10+1），与粗筛结果一致 —— 无遗漏，
+  逐个 `codesign --verify --strict` 全部通过，Team 为 `5Q2A46685M`；
+- 四个入口都真的跑起来了：`node --version`、`npm --version`（软链 +
+  shebang 路径）、`php -v`、`python3 -V`，且 python 能 `import ssl, sqlite3,
+  zlib, ctypes`（证明签名对 dlopen 无副作用）；
+- 内核解析器对着这棵真实树跑了一遍：三个运行时都报 `source=bundled`，
+  可执行文件路径都在包内，并且真的执行成功（临时集成测试，跑完即删）。
+- `Scripts/check-submission.sh` 新增三条检查（运行时目录非空、逐条按内核
+  清单核对可执行文件、包内每个 Mach-O 都验签），两条路径都实测过：
+  直接分发包装被拦下并指出该改哪里，上架形状的包通过。
+
+**仍未验证的**：真实的 App Store 归档 + 上传（需要证书与描述文件在位），
+以及**上架版在真机上跑一个带 `npm run` 的 Node 站点** —— 按上面的实测，
+那条路预期会因 `.bin` 的 EPERM 失败，属于已知限制而不是待修的 bug。
 
 ## 一次自己造成的误判（记下来免得重犯）
 
@@ -262,12 +358,16 @@ rpath 引用，那条路在签名分发下走不通。
 DEVELOPMENT_TEAM=<你的团队 ID> Scripts/archive.sh
 ```
 
-`ISC_BUNDLED_RUNTIMES` 默认 `php python`（≈110 MB）。要改内置哪几个，
-`archive.sh` 里有一行注释写着三档体积。
+`ISC_BUNDLED_RUNTIMES` 默认 `php python node`（解压后 ≈286 MB）。要改内置哪几个，
+`bundle-runtimes.sh` 里有一行注释写着三档体积。
 
 **归档会自动触发一次 Release 构建**，而构建阶段 "Bundle Runtimes" 排在
-CodeSign 之前 —— 所以运行时已经在包内、也被签名覆盖了。这正是它必须在
-那里的原因：签名不覆盖之后才放进包里的文件。
+CodeSign 之前 —— 运行时会在这时候被解压、**逐个签名**（脚本自己做，用
+`Configs/Runtime.entitlements`）、再放进包里。它必须排在那里的原因是：
+签名不覆盖之后才加进包里的文件。
+
+同一行还会把 `CODE_SIGN_ENTITLEMENTS` 覆盖成 `Phecda-AppStore.entitlements`
+（带沙箱）—— 工程默认那份是**不带沙箱**的，给直接分发与日常开发用。
 
 #### 导出成功（2026-10-06）
 
@@ -317,8 +417,14 @@ Release 同样生效 —— 于是归档是 ad-hoc 签的（`TeamIdentifier=not 
 现在：Debug 保留 ad-hoc（本机不一定有该团队的开发证书，日常构建不该因为
 签名缺失跑不起来），Release **不写**，由自动签名挑 Apple Distribution。
 
-代价要说清楚：**Debug 构建的沙箱不生效**（ad-hoc 没有 Team ID），所以本机
-测不到沙箱行为。要看沙箱得用 Release 或真机安装。
+代价要说清楚（**已纠正**）：早先这里写"Debug 构建的沙箱不生效（ad-hoc 没有
+Team ID）"，那是错的 —— ad-hoc + `app-sandbox` 的进程照样进沙箱。
+
+现在的形态是**刻意的两份 entitlement**：`Phecda.entitlements` 不带沙箱
+（Debug 与直接分发 Release 用），`Phecda-AppStore.entitlements` 带沙箱
+（只有 `archive.sh` 归档时通过 `CODE_SIGN_ENTITLEMENTS` 覆盖选中）。
+所以本机 Debug 构建**测不到沙箱行为**是事实，但原因不是签名方式，而是
+那份文件里本来就没有沙箱 —— 要测沙箱行为，跑 `archive.sh`。
 
 #### 还需要什么才能导出
 

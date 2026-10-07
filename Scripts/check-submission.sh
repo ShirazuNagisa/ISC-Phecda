@@ -22,7 +22,7 @@ need() {
   local v
   v=$(plutil -extract "$key" raw "$PLIST" 2>/dev/null || true)
   if [ -z "$v" ]; then
-    echo "  ❌ $key —— 缺失（$why）"
+    echo "  ❌ $key —— 缺失（${why}）"
     fail=1
   else
     echo "  ✅ $key = $v"
@@ -56,7 +56,69 @@ if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "com.apple.security
   echo "  ✅ com.apple.security.app-sandbox"
 else
   echo "  ❌ 没有沙箱 entitlement —— Mac App Store 要求必须开启"
+  echo "     归档要用 Scripts/archive.sh（它会切到 Phecda-AppStore.entitlements）"
   fail=1
+fi
+
+# 内置运行时：上架版**必须**有，而且必须是解压好、签过名的。
+#
+# # 为什么这三条不能只查一条
+#
+# 沙箱只允许执行 /Applications 子树与系统目录，所以运行时只能以可执行文件
+# 的形态待在包里。缺了、只有归档没有解压、或者解压了没签名，三种情况的
+# 现象在本地都可能是"看起来没装运行时"，而上架后分别是"站点起不来"
+# "站点起不来"和"上传被拒"。分开查，报错才能指向该改的那一处。
+RUNTIMES_DIR="$APP/Contents/Resources/runtimes"
+if [ ! -d "$RUNTIMES_DIR" ]; then
+  echo "  ❌ 包里没有 Contents/Resources/runtimes —— 上架版必须内置运行时（沙箱不允许执行包外的二进制）"
+  fail=1
+else
+  CORE_DIR="${ISC_CORE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/ISC-Core}"
+  MANIFEST=""
+  if [ -d "$CORE_DIR" ]; then
+    MANIFEST="$(cd "$CORE_DIR" && CGO_ENABLED=0 go run ./Scripts/manifestdump darwin/arm64 2>/dev/null || true)"
+  fi
+
+  bundled=0
+  while IFS= read -r kind_dir; do
+    [ -n "$kind_dir" ] || continue
+    kind="$(basename "$kind_dir")"
+    while IFS= read -r version_dir; do
+      [ -n "$version_dir" ] || continue
+      version="$(basename "$version_dir")"
+      bundled=$((bundled + 1))
+
+      # 期望的可执行文件取自内核清单 —— 与内核解析时用的是同一份数据源，
+      # 这里再猜一遍路径就等于给"构建脚本和内核不同步"留了口子。
+      executable="$(printf '%s\n' "$MANIFEST" | awk -F'\t' -v k="$kind" '$1==k{print $7}')"
+      if [ -z "$executable" ]; then
+        echo "  ⚠️  $kind：内核清单里没有这个运行时，无法核对可执行文件"
+      elif [ -f "$version_dir/$executable" ]; then
+        echo "  ✅ $kind $version → $executable"
+      else
+        echo "  ❌ $kind $version 里没有 $executable —— 内核会认为这个运行时不可用"
+        fail=1
+      fi
+
+      # 包内每个 Mach-O 都要签过名，否则上传会被拒。
+      unsigned=0
+      while IFS= read -r -d '' f; do
+        case "$(file -b "$f")" in *Mach-O*) ;; *) continue ;; esac
+        codesign --verify --strict "$f" >/dev/null 2>&1 || {
+          echo "  ❌ 未签名或签名无效：${f#"$APP"/}"
+          unsigned=$((unsigned + 1))
+        }
+      done < <(find "$version_dir" -type f -print0)
+      [ "$unsigned" -eq 0 ] || fail=1
+    done < <(find "$kind_dir" -mindepth 1 -maxdepth 1 -type d | sort)
+  done < <(find "$RUNTIMES_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+
+  if [ "$bundled" -eq 0 ]; then
+    echo "  ❌ runtimes 目录是空的 —— 构建阶段没有真的放进运行时"
+    fail=1
+  else
+    echo "  ✅ 内置运行时合计 $(du -sm "$RUNTIMES_DIR" | awk '{print $1}') MB"
+  fi
 fi
 
 # 版本号必须与 CFBundleShortVersionString 一致，否则 App Store Connect 上

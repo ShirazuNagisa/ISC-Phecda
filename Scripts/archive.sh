@@ -14,11 +14,14 @@
 # 缺任何一件，xcodebuild 都会停在签名那一步 —— 那是**预期**的失败，不是
 # 这个脚本写错了。想确认脚本本身对不对，看它有没有走到 "CodeSign"。
 #
-# # 为什么内置运行时在这一步之前就完成了
+# # 为什么内置运行时必须在归档这一步之前就位
 #
 # 归档会触发一次完整的 Release 构建，而构建阶段 "Bundle Runtimes" 排在
-# CodeSign 之前 —— 所以运行时已经在包内、也被签名覆盖了。这正是它必须
-# 在那里的原因：签名不覆盖之后才放进包里的文件。
+# CodeSign 之前 —— 运行时会在这时候被解压、**逐个签名**、再放进包里。
+# 它必须排在那里的原因是：签名不覆盖之后才加进包里的文件。
+#
+# 注意包内运行时的签名是**脚本自己做的**（Configs/Runtime.entitlements），
+# 不是 Xcode 顺手签的：它们是独立进程，应用那份 entitlement 管不到它们。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,10 +45,24 @@ EXPORT="${ISC_EXPORT_PATH:-$ROOT/Build/export}"
 # 内置哪几个运行时。上架版本**必须**内置（App Review 2.5.2 禁止下载并执行
 # 代码），而放哪几个是打包决定 —— 改这里那一行即可，内核不用动。
 #
-#   php python                   ≈ 110 MB   最小版本，建议先过审
-#   php python java              ≈ 450 MB
-#   php python java dotnet       ≈ 1.0 GB
-export ISC_BUNDLED_RUNTIMES="${ISC_BUNDLED_RUNTIMES:-php python}"
+# 注意别和内核的运行时环境变量混了：**同名但用途不同**。这里这个（构建期）
+# 是"往包里放哪几个"，而 ISC_BUNDLED_RUNTIMES 作为**运行时**环境变量时是
+# "包在哪"，由 AppModel 设置。
+#
+#   php python                   ≈ 106 MB
+#   php python node              ≈ 275 MB   ← 默认
+#   php python node java         ≈ 730 MB
+export ISC_BUNDLED_RUNTIMES="${ISC_BUNDLED_RUNTIMES:-php python node}"
+
+# 这一个开关决定"这是上架构建"。它同时管三件事，三者必须一致：
+#
+#   1. 沙箱 entitlement（下面 xcodebuild 的 CODE_SIGN_ENTITLEMENTS）；
+#   2. 内置运行时（构建阶段 xcode-bundle-runtimes.sh 据此决定放不放）；
+#   3. 内核库的 appstore 标签（再下面重建 Vendor/ISC）。
+#
+# 三者不一致的后果各不相同，但都很难从症状反推：只有沙箱没内置 → 站点起
+# 不来且报错是 EPERM；只有内置没沙箱 → 本地全对而审核看到的是另一份二进制。
+export ISC_APPSTORE=1
 
 # 先用 appstore 标签重建内核库并换进 Vendor/。
 #
@@ -88,12 +105,19 @@ mkdir -p "$EXPORT"
 # 描述文件。不带它就只能用**已经存在于本机**的描述文件，而新项目的 App ID
 # 还没登记过 —— 报错是 "No profiles for 'app.isc.phecda' were found"，看起来
 # 像描述文件建错了，其实是没人去建。
+#
+# CODE_SIGN_ENTITLEMENTS 在这里**覆盖**工程里的默认值，这是本次改动的关键：
+# 工程默认指向不带沙箱的 Phecda.entitlements（直接分发与日常开发用），
+# 只有归档这一条路才切到带沙箱的 Phecda-AppStore.entitlements。
+# 写在这里而不是工程里，是因为"这份构建要不要沙箱"是**分发渠道**的决定，
+# 而工程文件只能有一个默认值。
 xcodebuild archive \
   -allowProvisioningUpdates \
   -project "$ROOT/Phecda.xcodeproj" \
   -scheme Phecda \
   -configuration Release \
   -destination 'generic/platform=macOS' \
+  CODE_SIGN_ENTITLEMENTS=Phecda-AppStore.entitlements \
   ${DEVELOPMENT_TEAM:+-development-team "$DEVELOPMENT_TEAM"} \
   -archivePath "$ARCHIVE"
 

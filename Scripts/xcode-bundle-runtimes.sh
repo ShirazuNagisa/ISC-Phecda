@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 #
-# Xcode 构建阶段：把运行时归档放进应用包。
+# Xcode 构建阶段：把运行时解压、签名后放进应用包。
 #
 # # 什么时候会真的放
 #
-#   - Release 配置：默认放（上架版本必须随包内置，见 App Review 2.5.2）；
-#   - 或者显式设置了 ISC_BUNDLED_RUNTIMES：CI 按渠道出不同的包时用；
-#   - 其余情况（日常 Debug 构建）**跳过** —— 否则每敲一次 Cmd+R 都要下
-#     一百多 MB，而开发时根本用不到内置运行时。
+#   只有 ISC_APPSTORE=1 时（Scripts/archive.sh 会设）。日常的 Debug 与
+#   直接分发 Release 构建都跳过 —— 它们没有沙箱，可以按需下载运行时，
+#   包因此小得多（内置 node+php+python 要多占约 275 MB）。
+#
+#   显式设置 ISC_BUNDLED_RUNTIMES 也会触发（CI 按渠道出不同包时用）。
+#
+# # 为什么上架版必须放进**解压好的**运行时
+#
+# 沙箱进程只能 exec /Applications 子树与系统目录。归档放在包里没问题，
+# 但内核把解压目标定在数据目录（容器）—— 解出来的二进制就在放行名单之外，
+# 于是每个运行时都以 `fork/exec …: operation not permitted` 结束。
+# 详见 Scripts/bundle-runtimes.sh 的开头。
 #
 # # 必须排在签名之前
 #
@@ -18,8 +26,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [ "${CONFIGURATION:-}" != "Release" ] && [ -z "${ISC_BUNDLED_RUNTIMES:-}" ]; then
-  echo "note: 跳过内置运行时（配置 ${CONFIGURATION:-未知}，且没有设置 ISC_BUNDLED_RUNTIMES）"
+if [ "${ISC_APPSTORE:-}" != "1" ] && [ -z "${ISC_BUNDLED_RUNTIMES:-}" ]; then
+  echo "note: 跳过内置运行时（ISC_APPSTORE 未设，也没有显式指定 ISC_BUNDLED_RUNTIMES）"
   exit 0
 fi
 

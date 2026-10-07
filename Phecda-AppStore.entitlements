@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Store 版的 entitlement：**沙箱是强制的**（Mac App Store 要求）。
+	  直接分发版用 Phecda.entitlements，那份没有沙箱。
+
+	  由 Scripts/archive.sh 在归档时通过 CODE_SIGN_ENTITLEMENTS 选中，
+	  见该脚本里的说明。日常 Debug/Release 构建不会用到这个文件。
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- 出站：DNS 记录、ACME 证书、Cloudflare 隧道。 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- 入站：反向代理要监听端口把请求转给站点。
+	     低端口（<1024）在沙箱里绑不了，因此对外仍然没有端口号这件事
+	     由 Cloudflare 边缘承担 443 来保证（见 Documentation/APPSTORE.md）。 -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+
+	<!-- 用户选中的源码目录：站点跑在用户自己的项目上，必须能读写。 -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!-- Java 与 .NET 都要 JIT。没有这一条它们起不来，而症状是
+	     "运行时装好了但站点启动就退"，看不出与沙箱有关。 -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>

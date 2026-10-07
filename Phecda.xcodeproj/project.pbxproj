@@ -53,6 +53,7 @@
 		1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
 		E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; };
+		57F47835ACACDD04159985D2 /* Phecda-AppStore.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Phecda-AppStore.entitlements"; sourceTree = "<group>"; };
 		65DC653B3D2AC8A7EB6F881D /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
 		75FBF58C58B8041CB8E00F20 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Configs/Release.xcconfig; sourceTree = "<group>"; };
 		49819CC4F1A616E422B369EF /* libisc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libisc.dylib; path = Vendor/ISC/libisc.dylib; sourceTree = "<group>"; };
@@ -144,6 +145,7 @@
 				49819CC4F1A616E422B369EF /* libisc.dylib */,
 				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
 				E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */,
+				57F47835ACACDD04159985D2 /* Phecda-AppStore.entitlements */,
 				31A5E41A9BD04E385DB196E5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -337,10 +339,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Phecda.entitlements;
-				// Debug 用 ad-hoc：本机不一定有该团队的开发证书，而日常构建
-				// 不该因为签名缺失而跑不起来。代价是**沙箱不生效**（ad-hoc 没有
-				// Team ID），所以本机测不到沙箱行为 —— 这一条写在
-				// Documentation/APPSTORE.md 里。
+				// 这份 entitlement **没有沙箱**，这是刻意的：沙箱进程的
+				// process-exec 只放行 /Applications 与系统目录，而本产品的核心
+				// 就是在用户机器上跑用户的工具链（含项目目录里的 .bin）。
+				// 上架那份走 Phecda-AppStore.entitlements，由 archive.sh 覆盖选中。
+				//
+				// Debug 另用 ad-hoc：本机不一定有该团队的开发证书，而日常构建
+				// 不该因为签名缺失而跑不起来。
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				// 显式写团队，不让 Xcode 猜。

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Store 版里**随包内置的运行时二进制**（node/php/python）用这份
+	  entitlement 签名，见 Scripts/bundle-runtimes.sh。
+
+	  # 为什么它们必须单独签名，而不是复用应用那份
+
+	  entitlement 是**按进程**生效的，不继承。包内这些二进制是独立的进程，
+	  应用那份里写了什么都不影响它们。上架要求包内所有可执行文件都签过名，
+	  而签名时要指定 entitlement —— 不给就是空集，于是 node 的 JIT 与
+	  原生扩展加载全部失败。
+
+	  # 三条各管什么
+
+	  · allow-jit / allow-unsigned-executable-memory
+	    V8 与 CPython 的 JIT／可写可执行内存。缺了它们 node 起不来，
+	    症状是"运行时装好了但站点启动就退"。
+
+	  · disable-library-validation
+	    npm/pip 装出来的原生扩展（.node / .so）是**没有签名**的第三方
+	    产物。开启库校验时 dlopen 会被拒，于是 `npm i sharp` 这类操作
+	    在沙箱里以"找不到模块"的形态失败 —— 那个报错与签名毫无字面关系。
+	    这一条是上架版能在真实项目上跑起来的前提。
+
+	  · allow-dyld-environment-variables
+	    node/php 会设置 DYLD_* 交给子进程；没有这一条时它被静默忽略，
+	    表现为某些工具链找不到自己的库。
+	-->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+	<true/>
+</dict>
+</plist>

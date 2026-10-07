@@ -203,9 +203,23 @@ struct OnboardingView: View {
                 Text(credentialFailure).font(.caption).foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if credentialSaved {
+if credentialSaved {
                 Label(tr("服务商已保存。", "Credential saved."), systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.green)
+            } else if !model.credentials.isEmpty {
+                // 已经有服务商时**明说**并把已有的列出来。否则用户看到的
+                // 是一张空表单加一个灰着的"下一步"，会以为必须先填 ——
+                // 而他其实早就配好了，只是引导不知道。
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(tr("这台机器上已经配置过 \(model.credentials.count) 个 DNS 服务商，可以直接继续。",
+                             "This machine already has \(model.credentials.count) DNS provider(s) configured — you can continue."),
+                          systemImage: "checkmark.circle.fill")
+                        .font(.caption).foregroundStyle(.green)
+                    Text(tr("想再加一个的话，填下面的表单也行。",
+                            "Fill in the form below if you want to add another one."))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -384,10 +398,15 @@ struct OnboardingView: View {
         switch page {
         case .welcome: return true
         case .provider:
-            // 已经存过就直接放行；否则要求填完整 —— 一个允许空着过去的
-            // "必填步骤"会让用户以为后面某处还能补，而其实不能。
-            return credentialSaved || (model.phase == .running
-                && CredentialDraft.isValid(provider: provider, label: label, values: values))
+// 三种情况都放行：
+                //   1. 这次向导里刚存过；
+                //   2. **机器上早就有服务商了** —— 逼用户再建一个一模一样的
+                //      凭据是本末倒置，而症状是"下一步"灰着、后面的页永远
+                //      看不到（踩过：在有服务商的机器上重跑引导会卡死）；
+                //   3. 表单填完整。
+                if credentialSaved || !model.credentials.isEmpty { return true }
+                return model.phase == .running
+                    && CredentialDraft.isValid(provider: provider, label: label, values: values)
         case .network: return needsRelay != nil
         case .firstService:
             if publishing { return false }
@@ -407,9 +426,11 @@ struct OnboardingView: View {
         case .welcome:
             page = .provider
         case .provider:
-            if !credentialSaved {
-                guard await saveCredential() else { return }
-            }
+if !credentialSaved && model.credentials.isEmpty {
+                    // 已有服务商时不再存一次 —— 那会造出一条重复凭据，
+                    // 而用户只是想把引导走完。
+                    guard await saveCredential() else { return }
+                }
             page = .network
         case .network:
             page = .firstService

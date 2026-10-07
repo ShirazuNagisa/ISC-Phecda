@@ -40,7 +40,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .home: tr("首页", "Home")
         case .services: tr("服务", "Services")
         case .dns: tr("DNS", "DNS")
-        case .remote: tr("远程访问", "Remote Access")
+        case .remote: tr("Mizar 配置", "Mizar")
         }
     }
 
@@ -153,7 +153,6 @@ enum AppSection: String, CaseIterable, Identifiable {
     var remoteDevices: [RemoteDevice] = []
     /// 进行中的配对会话。它有时效，因此单独轮询刷新倒计时。
     var pairingSession: RemotePairingSession?
-    var remoteAudit: [AuditEntry] = []
 
     // MARK: 界面状态
 

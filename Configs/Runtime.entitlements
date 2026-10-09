@@ -29,6 +29,24 @@
 	    node/php 会设置 DYLD_* 交给子进程；没有这一条时它被静默忽略，
 	    表现为某些工具链找不到自己的库。
 	-->
+	<!--
+	  # 为什么必须带 app-sandbox 与 inherit
+	  这一条是上传时被 App Store Connect 顶回来的，本机导出看不出来：
+
+	    App sandbox not enabled. The following executables must include the
+	    "com.apple.security.app-sandbox" entitlement with a Boolean value of
+	    true: [... runtimes/node/.../node, runtimes/php/8.5.8/php,
+	    runtimes/python/3.13.16/bin/python3.13]
+
+	  沙箱应用的**每个**内嵌可执行文件都要自己声明 app-sandbox，父应用那份
+	  管不到它。而只有 app-sandbox 还不够：不带 inherit 时子进程会拿到一个
+	  只有自己签名里那几条权限的**空沙箱** —— 站点起不来、端口也绑不上。
+	  inherit 让它并入父应用的沙箱，与"关掉窗口也不停站点"的既有行为一致。
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.inherit</key>
+	<true/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>

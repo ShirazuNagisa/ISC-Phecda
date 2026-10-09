@@ -184,10 +184,20 @@ for kind in $RUNTIMES; do
   stamp="$CACHE/stamps/$kind-$version.identity"
   target="$DEST/$kind/$version"
 
-  # 缓存命中条件：树在**且**是用同一个身份签的。换了身份（本机试验的
-  # ad-hoc 与归档的分发证书）必须重签，否则包里带的是别人签过的二进制。
+  # 缓存命中条件：树在**且**是用同一个身份 + 同一份 entitlement 签的。
+  #
+  # 换了身份（本机试验的 ad-hoc 与归档的分发证书）必须重签，否则包里带的
+  # 是别人签过的二进制。
+  #
+  # entitlement 也必须进缓存键：改了 Runtime.entitlements（例如补上
+  # app-sandbox）却不重签的话，包里留下的仍是按旧规则签过的树，而这件事
+  # **本地完全看不出来** —— 归档成功、装机也能跑，只有上传时才会被顶回来：
+  #
+  #   App sandbox not enabled. The following executables must include the
+  #   "com.apple.security.app-sandbox" entitlement ...
+  SIGN_STAMP="$IDENTITY $(shasum -a 256 "$ENTITLEMENTS" | awk '{print $1}')"
   cached=0
-  if [ -f "$tree/$executable" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$IDENTITY" ]; then
+  if [ -f "$tree/$executable" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$SIGN_STAMP" ]; then
     cached=1
     echo "    · 复用已解压的缓存树"
   fi
@@ -207,7 +217,7 @@ for kind in $RUNTIMES; do
     chmod +x "$tree.staging/$executable"
     mv "$tree.staging" "$tree"
     sign_tree "$tree"
-    printf '%s' "$IDENTITY" > "$stamp"
+    printf '%s' "$SIGN_STAMP" > "$stamp"
   fi
 
   # 放进包里。用 ditto 而不是 cp：它会连权限位与扩展属性一起搬，

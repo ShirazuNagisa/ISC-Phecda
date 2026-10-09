@@ -138,6 +138,26 @@ else
         }
       done < <(find "$version_dir" -type f -print0)
       [ "$unsigned" -eq 0 ] || fail=1
+
+      # 光签了名不够 —— 沙箱应用的**每个**内嵌可执行文件都要自己声明
+      # app-sandbox，父应用那份管不到它。这一条只有上传时才会被告知：
+      #
+      #   App sandbox not enabled. The following executables must include the
+      #   "com.apple.security.app-sandbox" entitlement ... runtimes/.../node
+      #
+      # 本机导出、装机运行、自检全都不报错，所以必须在这里查。
+      # 只查可执行文件：ASC 的要求就是这一条，.dylib 不在其列（它们
+      # 照样会被同一份 entitlement 签，但那不影响判定）。
+      sandboxed=0
+      while IFS= read -r -d '' f; do
+        case "$(file -b "$f")" in *Mach-O*executable*) ;; *) continue ;; esac
+        codesign -d --entitlements - "$f" 2>/dev/null | grep -q "com.apple.security.app-sandbox" || {
+          echo "  ❌ 可执行文件没有沙箱 entitlement：${f#"$APP"/}"
+          echo "     上传会被拒；Runtime.entitlements 里要同时有 app-sandbox 与 inherit"
+          sandboxed=$((sandboxed + 1))
+        }
+      done < <(find "$version_dir" -type f -print0)
+      [ "$sandboxed" -eq 0 ] || fail=1
     done < <(find "$kind_dir" -mindepth 1 -maxdepth 1 -type d | sort)
   done < <(find "$RUNTIMES_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
 

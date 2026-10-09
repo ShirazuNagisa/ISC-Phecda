@@ -22,6 +22,17 @@ struct SettingsView: View {
     /// 两者常常不一致（点了开但缺 cloudflared），而那个差值正是要显示的东西。
     @State private var proxyPort = ""
 
+    /// 「不显示应用图标」。
+    ///
+    /// 它是**应用自己的**偏好（`DockIconPreference`），不走内核，因此下面
+    /// 那个「保存」提交的内核 patch 里没有它 —— 改了立刻生效。初值在视图
+    /// 构造时从偏好里读：设置面板每次打开都是新造的视图，所以读到的永远
+    /// 是当前值。
+    @State private var hideDockIcon = DockIconPreference.isHidden
+
+    /// 「最小化启动 Phecda」。同上：应用自己的偏好，立即生效。
+    @State private var startMinimized = LaunchPreference.startMinimized
+
     @State private var loaded = false
     @State private var busy = false
     @State private var failure: String?
@@ -47,7 +58,7 @@ struct SettingsView: View {
                 Image(systemName: "gearshape").foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tr("设置", "Settings")).font(.headline)
-                    Text(tr("证书、反向代理与日志。", "Certificates, reverse proxy and logging."))
+                    Text(tr("启动、外观、证书、反向代理与日志。", "Launch, appearance, certificates, reverse proxy and logging."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -57,6 +68,8 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    launchSection
+                    appearanceSection
                     certificateSection
                     proxySection
                     tunnelSection
@@ -92,6 +105,57 @@ struct SettingsView: View {
     }
 
     // MARK: 分区
+
+    /// 打开应用时要不要直接显示主界面。
+    ///
+    /// 与「外观」同属应用自己的偏好：立即生效，不随「保存」提交，也不受
+    /// 「取消」影响 —— 说明文字里要写明，否则用户会以为按了取消就该恢复。
+    private var launchSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(tr("启动", "Launch"),
+                         tr("打开应用时要不要直接把主界面推出来。",
+                            "Whether opening the app brings up the main window."))
+
+            Toggle(tr("最小化启动 Phecda", "Start Phecda minimized"), isOn: $startMinimized)
+                .toggleStyle(.switch)
+                .onChange(of: startMinimized) { _, minimized in
+                    LaunchPreference.setStartMinimized(minimized)
+                }
+            // 这一段的重点是最后两句：关掉窗口不停内核、图标始终能把界面叫回来。
+            // 少了它们，"不弹窗口"听起来就像"应用缩进后台不管事了"。
+            Text(tr("关闭时（默认）：每次打开应用都会显示主界面。打开后：启动只在菜单栏出现，不弹窗口。两种情况下点程序坞图标或菜单栏图标都能把主界面叫出来；关掉窗口也不会停内核，站点照常运行。这一项立即生效，不由「保存」提交。",
+                    "Off (default): opening the app shows the main window. On: it starts in the menu bar only. Either way, the Dock icon and the menu bar icon bring the main window back, and closing the window never stops the kernel or your sites. This takes effect at once and is not submitted by Save."))
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 应用自己长什么样。
+    ///
+    /// # 它与这一页别的分区不是一回事
+    ///
+    /// 其余几节写的是**内核**的设置，走「保存」整份提交。这一节只关乎本机
+    /// 这一个进程怎么呈现（见 `DockIconPreference`），内核既不知道也不该知道。
+    /// 因此它**立即生效**：不随「保存」提交，也不受「取消」影响。
+    ///
+    /// 说明文字里必须写明这一点。开关改完图标就变了、而旁边那个「取消」
+    /// 撤不回来 —— 不说清楚的话，用户会以为按了取消程序坞里的图标就该回来。
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(tr("外观", "Appearance"),
+                         tr("应用自己怎么显示，与内核无关。", "How the app itself appears. The kernel is not involved."))
+
+            Toggle(tr("不显示应用图标", "Hide the app icon"), isOn: $hideDockIcon)
+                .toggleStyle(.switch)
+                .onChange(of: hideDockIcon) { _, hidden in DockIconPreference.setHidden(hidden) }
+            // 这一条不是补充说明，而是这个开关的安全依据：菜单栏图标在两种
+            // 形态下都在，所以关掉程序坞图标永远不会让人够不着应用。
+            Text(tr("打开后只在菜单栏保留图标：程序坞与 Cmd-Tab 里都不再有它。菜单栏图标始终在，点了就能开主窗口或退出。这一项立即生效，不由「保存」提交，「取消」也撤不回。",
+                    "When on, only the menu bar icon remains — the app leaves the Dock and Cmd-Tab. The menu bar icon is always there, and it can open the main window or quit. This takes effect at once: Save does not submit it and Cancel does not undo it."))
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
     private var certificateSection: some View {
         VStack(alignment: .leading, spacing: 10) {

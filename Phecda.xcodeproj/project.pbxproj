@@ -12,6 +12,7 @@
 		15003573360A256856BDC6B8 /* CredentialViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C7A27F37AB95B4A2294A603 /* CredentialViews.swift */; };
 		9D05464535922341EDF69386 /* DDNSViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88344F029A80A3ACCBE2195E /* DDNSViews.swift */; };
 		B2DBA1485382608730FA6651 /* DNSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8D08E06D4D29F563765D1A /* DNSView.swift */; };
+		42A70541756769EC836EA965 /* FreshRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA0963C683A061F84029C19 /* FreshRun.swift */; };
 		15266CCE1D5FF62B90091003 /* ISCPhecdaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */; };
 		AE58EA9CCFCF714F2971CB25 /* JobsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF6775A1F7CFB3484375333 /* JobsView.swift */; };
 		96ACDBFBF2FEBCE0FB6BF26E /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6816ACB6F965A41156ABDF31 /* Localization.swift */; };
@@ -19,12 +20,14 @@
 		372C0914F967F55F112CA338 /* MenuBarPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */; };
 		82A94A24F2C5CAC2DD2C89EB /* NewServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B812F00D383CCC66E219043 /* NewServiceView.swift */; };
 		A4D262DD21B9CC748D235643 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C1B1E16167E90D15542DF5 /* OnboardingView.swift */; };
+		9CE0009CC18C3EF374790937 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A718B0841DCFFF9485D26CEB /* Preferences.swift */; };
 		369908FF7BD4A64D1E070D70 /* RemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD290EF95E29A5EFA091F6C /* RemoteView.swift */; };
 		E5C2186E8F621B83B7CED5DD /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA3EC0E36331858BAF6A73A /* RootView.swift */; };
 		91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D14E1EC523B5F101C229441 /* ServicesView.swift */; };
 		49E90B00956BD92C98B608D1 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2052E6803097DFF8032DE202 /* SettingsView.swift */; };
 		C5D31064CAECF957F16DBDCD /* ApnsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12308B7286E6A8C67DB7DA4A /* ApnsService.swift */; };
 		165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AD8FE6F4409ABA226995E31D /* Assets.xcassets */; };
+		AC26934E6D6BD64B04E22CBA /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 6BF7E207423B6733C820191C /* AppIcon.icon */; };
 		BB61120D31B45731F5D7454D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */; };
 		94D617931304E635D18FBB8E /* ISCCore in Frameworks */ = {isa = PBXBuildFile; productRef = 53BF02C4C7C2972709CC49C4 /* ISCCore */; };
 		9901BD8C96498886CB035805 /* libisc.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 49819CC4F1A616E422B369EF /* libisc.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
@@ -37,6 +40,7 @@
 		2C7A27F37AB95B4A2294A603 /* CredentialViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialViews.swift; sourceTree = "<group>"; };
 		88344F029A80A3ACCBE2195E /* DDNSViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DDNSViews.swift; sourceTree = "<group>"; };
 		6D8D08E06D4D29F563765D1A /* DNSView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DNSView.swift; sourceTree = "<group>"; };
+		5AA0963C683A061F84029C19 /* FreshRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FreshRun.swift; sourceTree = "<group>"; };
 		FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ISCPhecdaApp.swift; sourceTree = "<group>"; };
 		6BF6775A1F7CFB3484375333 /* JobsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobsView.swift; sourceTree = "<group>"; };
 		6816ACB6F965A41156ABDF31 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
@@ -44,12 +48,14 @@
 		4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPanelView.swift; sourceTree = "<group>"; };
 		5B812F00D383CCC66E219043 /* NewServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewServiceView.swift; sourceTree = "<group>"; };
 		22C1B1E16167E90D15542DF5 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A718B0841DCFFF9485D26CEB /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
 		3AD290EF95E29A5EFA091F6C /* RemoteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteView.swift; sourceTree = "<group>"; };
 		ADA3EC0E36331858BAF6A73A /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		5D14E1EC523B5F101C229441 /* ServicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesView.swift; sourceTree = "<group>"; };
 		2052E6803097DFF8032DE202 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		12308B7286E6A8C67DB7DA4A /* ApnsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApnsService.swift; sourceTree = "<group>"; };
 		AD8FE6F4409ABA226995E31D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6BF7E207423B6733C820191C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		1BCD76335689260F0567DA5C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; };
 		E227BC70E1DA7E4B52D1D7EA /* Phecda.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; };
@@ -166,6 +172,7 @@
 				2C7A27F37AB95B4A2294A603 /* CredentialViews.swift */,
 				88344F029A80A3ACCBE2195E /* DDNSViews.swift */,
 				6D8D08E06D4D29F563765D1A /* DNSView.swift */,
+				5AA0963C683A061F84029C19 /* FreshRun.swift */,
 				FB2AEB6C5B8D014B55094B5E /* ISCPhecdaApp.swift */,
 				6BF6775A1F7CFB3484375333 /* JobsView.swift */,
 				6816ACB6F965A41156ABDF31 /* Localization.swift */,
@@ -173,11 +180,13 @@
 				4AAA5BA788237E9D1C2CEEDD /* MenuBarPanelView.swift */,
 				5B812F00D383CCC66E219043 /* NewServiceView.swift */,
 				22C1B1E16167E90D15542DF5 /* OnboardingView.swift */,
+				A718B0841DCFFF9485D26CEB /* Preferences.swift */,
 				3AD290EF95E29A5EFA091F6C /* RemoteView.swift */,
 				ADA3EC0E36331858BAF6A73A /* RootView.swift */,
 				5D14E1EC523B5F101C229441 /* ServicesView.swift */,
 				2052E6803097DFF8032DE202 /* SettingsView.swift */,
 				AD8FE6F4409ABA226995E31D /* Assets.xcassets */,
+				6BF7E207423B6733C820191C /* AppIcon.icon */,
 			);
 			path = Apps/Phecda;
 			sourceTree = "<group>";
@@ -259,6 +268,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				165CF623CC3A4888CFAC55FC /* Assets.xcassets in Resources */,
+				AC26934E6D6BD64B04E22CBA /* AppIcon.icon in Resources */,
 				BB61120D31B45731F5D7454D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -275,6 +285,7 @@
 				15003573360A256856BDC6B8 /* CredentialViews.swift in Sources */,
 				9D05464535922341EDF69386 /* DDNSViews.swift in Sources */,
 				B2DBA1485382608730FA6651 /* DNSView.swift in Sources */,
+				42A70541756769EC836EA965 /* FreshRun.swift in Sources */,
 				15266CCE1D5FF62B90091003 /* ISCPhecdaApp.swift in Sources */,
 				AE58EA9CCFCF714F2971CB25 /* JobsView.swift in Sources */,
 				96ACDBFBF2FEBCE0FB6BF26E /* Localization.swift in Sources */,
@@ -282,6 +293,7 @@
 				372C0914F967F55F112CA338 /* MenuBarPanelView.swift in Sources */,
 				82A94A24F2C5CAC2DD2C89EB /* NewServiceView.swift in Sources */,
 				A4D262DD21B9CC748D235643 /* OnboardingView.swift in Sources */,
+				9CE0009CC18C3EF374790937 /* Preferences.swift in Sources */,
 				369908FF7BD4A64D1E070D70 /* RemoteView.swift in Sources */,
 				E5C2186E8F621B83B7CED5DD /* RootView.swift in Sources */,
 				91DDA5548D934BDADA2C4015 /* ServicesView.swift in Sources */,
@@ -370,7 +382,7 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 				);
-				MARKETING_VERSION = 0.4.2;
+				MARKETING_VERSION = 0.4.5;
 				PRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
 				PRODUCT_NAME = "ISC Phecda";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -420,7 +432,7 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 				);
-				MARKETING_VERSION = 0.4.2;
+				MARKETING_VERSION = 0.4.5;
 				PRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
 				PRODUCT_NAME = "ISC Phecda";
 				SWIFT_EMIT_LOC_STRINGS = YES;

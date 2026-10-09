@@ -7,9 +7,13 @@
 本仓库没有 XcodeGen（也不想为它引入 Homebrew），因此把生成过程本身留在
 脚本里 —— 它是可读的、可重跑的，而 pbxproj 只是它的产物。
 
+它同时生成两个**共享 scheme**（Phecda / Phecda-Fresh）—— 理由是"我怎么
+构建、怎么试"属于仓库，而不该只活在某个人的 xcuserdata 里。见 write_schemes。
+
 重跑：python3 Scripts/gen-project.py
 """
 import hashlib
+import json
 import pathlib
 import sys
 
@@ -85,6 +89,15 @@ def main() -> int:
         build_files.append(source_entry(key, name)[1])
 
     assets_fr, assets_bf = uid("fileref", "Assets"), uid("buildfile", "Assets")
+    # Icon Composer 的 AppIcon.icon（见文件末尾的 write_app_icon_notes）。
+    #
+    # `folder.iconcomposer.icon` 这个类型名不是我编的：Xcode 自己的
+    # StandardFileTypes.xcspec 里写着 `Identifier = folder.iconcomposer.icon`、
+    # `BasedOn = folder.abstractassetcatalog`、`IsTransparent = NO`，而
+    # AssetCatalogCompiler.xcspec 的 InputFileTypes 里也有它 —— 也就是说
+    # 这个类型会让 Xcode 把 .icon **当成一个不透明包**交给 actool 编译，
+    # 而不是拆开当散资源拷进包里（那是这条路最容易踩的坑：图标会静默消失）。
+    icon_fr, icon_bf = uid("fileref", "AppIcon.icon"), uid("buildfile", "AppIcon.icon")
     privacy_fr, privacy_bf = uid("fileref", "PrivacyInfo"), uid("buildfile", "PrivacyInfo")
     plist_fr = uid("fileref", "Info.plist")
     entitlements_fr = uid("fileref", "Phecda.entitlements")
@@ -121,6 +134,7 @@ def main() -> int:
 /* Begin PBXBuildFile section */
 {buildfile_lines}
 \t\t{assets_bf} /* Assets.xcassets in Resources */ = {{isa = PBXBuildFile; fileRef = {assets_fr} /* Assets.xcassets */; }};
+\t\t{icon_bf} /* AppIcon.icon in Resources */ = {{isa = PBXBuildFile; fileRef = {icon_fr} /* AppIcon.icon */; }};
 \t\t{privacy_bf} /* PrivacyInfo.xcprivacy in Resources */ = {{isa = PBXBuildFile; fileRef = {privacy_fr} /* PrivacyInfo.xcprivacy */; }};
 \t\t{pkg_bf} /* ISCCore in Frameworks */ = {{isa = PBXBuildFile; productRef = {pkg_dep} /* ISCCore */; }};
 \t\t{dylib_bf} /* libisc.dylib in Embed Libraries */ = {{isa = PBXBuildFile; fileRef = {dylib_fr} /* libisc.dylib */; settings = {{ATTRIBUTES = (CodeSignOnCopy, ); }}; }};
@@ -130,6 +144,7 @@ def main() -> int:
 \t\t{prod} /* ISC Phecda.app */ = {{isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ISC Phecda.app"; sourceTree = BUILT_PRODUCTS_DIR; }};
 {fileref_lines}
 \t\t{assets_fr} /* Assets.xcassets */ = {{isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; }};
+\t\t{icon_fr} /* AppIcon.icon */ = {{isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; }};
 \t\t{privacy_fr} /* PrivacyInfo.xcprivacy */ = {{isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Resources/PrivacyInfo.xcprivacy; sourceTree = "<group>"; }};
 \t\t{plist_fr} /* Info.plist */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Resources/Info.plist; sourceTree = "<group>"; }};
 \t\t{entitlements_fr} /* Phecda.entitlements */ = {{isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Phecda.entitlements; sourceTree = "<group>"; }};
@@ -243,6 +258,7 @@ def main() -> int:
 \t\t\tchildren = (
 {group_children}
 \t\t\t\t{assets_fr} /* Assets.xcassets */,
+\t\t\t\t{icon_fr} /* AppIcon.icon */,
 \t\t\t);
 \t\t\tpath = Apps/Phecda;
 \t\t\tsourceTree = "<group>";
@@ -324,6 +340,7 @@ def main() -> int:
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
 \t\t\t\t{assets_bf} /* Assets.xcassets in Resources */,
+\t\t\t\t{icon_bf} /* AppIcon.icon in Resources */,
 \t\t\t\t{privacy_bf} /* PrivacyInfo.xcprivacy in Resources */,
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
@@ -419,7 +436,7 @@ def main() -> int:
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
 \t\t\t\t);
-\t\t\t\tMARKETING_VERSION = 0.4.2;
+\t\t\t\tMARKETING_VERSION = 0.4.5;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
 \t\t\t\tPRODUCT_NAME = "ISC Phecda";
 \t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
@@ -469,7 +486,7 @@ def main() -> int:
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
 \t\t\t\t\t"$(inherited)",
 \t\t\t\t);
-\t\t\t\tMARKETING_VERSION = 0.4.2;
+\t\t\t\tMARKETING_VERSION = 0.4.5;
 \t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = app.isc.phecda;
 \t\t\t\tPRODUCT_NAME = "ISC Phecda";
 \t\t\t\tSWIFT_EMIT_LOC_STRINGS = YES;
@@ -525,8 +542,192 @@ def main() -> int:
 '''
     out = ROOT / "Phecda.xcodeproj"
     out.mkdir(exist_ok=True)
+    if check_app_icon() != 0:
+        return 1
+    if check_fresh_env_names() != 0:
+        return 1
     (out / "project.pbxproj").write_text(pbx)
-    print(f"✅ 已生成 {out}（{len(swift_files)} 个源文件）")
+    write_schemes(out, tgt)
+    print(f"✅ 已生成 {out}（{len(swift_files)} 个源文件 + 2 个共享 scheme）")
+    return 0
+
+
+# 「每次运行都是全新的应用」这件事，靠环境变量开（见 Apps/Phecda/FreshRun.swift）。
+#
+# 它必须落在**共享 scheme** 里才能进仓库：`xcuserdata` 下的 scheme 是每人一份、
+# 不进 git 的，而"我怎么构建、怎么试"是仓库该记住的事。这里生成两个：
+#
+#   Phecda        日常：真实数据目录，与安装版行为一致
+#   Phecda-Fresh  每次 Run 都从零：临时数据目录 + 文件密钥后端
+#
+# 为什么不是"把日常那个也设成从零"：这个仓库构建出来的应用是**能真用**的
+# （D26：GUI 就是内核的宿主）。把它默认设成一次性，等于某天想在开发构建里
+# 看一眼真实站点时，数据已经没了。要一键从零的人选另一个 scheme —— 两个
+# scheme 并存不会让任何一方变危险。
+#
+# 命令行那条路走 Scripts/fresh-run.sh：scheme 里的环境变量只在 Xcode **运行**
+# 时生效，`xcodebuild build` 不读它。
+def write_schemes(project: pathlib.Path, target_uuid: str) -> None:
+    # 同一段 BuildableReference 要出现在三个地方，缩进各不相同（Xcode 自己的
+    # 写法就是按嵌套层级缩进的）。生成时把缩进当参数传，免得提交上去的文件
+    # 里有一段缩进是歪的 —— 那种歪斜会让人以为文件被手工改过。
+    def ref(indent: int) -> str:
+        pad, inner = " " * indent, " " * (indent + 3)
+        return f'''{pad}<BuildableReference
+{inner}BuildableIdentifier = "primary"
+{inner}BlueprintIdentifier = "{target_uuid}"
+{inner}BuildableName = "ISC Phecda.app"
+{inner}BlueprintName = "Phecda"
+{inner}ReferencedContainer = "container:Phecda.xcodeproj">
+{pad}</BuildableReference>'''
+
+    def scheme(name: str, fresh: bool) -> str:
+        env = ""
+        if fresh:
+            env = '''
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "ISC_PHECDA_FRESH"
+            value = "1"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "ISC_SECRET_STORE"
+            value = "file"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>'''
+        # ignoresPersistentStateOnLaunch：从零的那份连 AppKit 的窗口状态恢复
+        # 也一起去掉。留着它的话，"全新应用"会带着上一次的窗口位置与选中项
+        # 启动 —— 那是唯一一处 State Restoration 会绕过临时数据目录的地方。
+        ignore_state = "YES" if fresh else "NO"
+        return f'''<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "2700"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES">
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+{ref(12)}
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <Testables>
+      </Testables>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "{ignore_state}"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+{ref(9)}
+      </BuildableProductRunnable>{env}
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+{ref(9)}
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>
+'''
+
+    directory = project / "xcshareddata" / "xcschemes"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "Phecda.xcscheme").write_text(scheme("Phecda", fresh=False))
+    (directory / "Phecda-Fresh.xcscheme").write_text(scheme("Phecda-Fresh", fresh=True))
+
+
+# scheme 里那两个环境变量必须与源码里的常量一致。
+#
+# 不一致的症状是"scheme 看着没错，但从零模式就是不生效"—— 而没有人会去怀疑
+# 一个 XML。两个名字在这里各写了一遍（gen-project.py 与 FreshRun.swift），
+# 因此让**生成器**来守这条线：对不上就直接生成失败，而不是交付一份看着对、
+# 实际不起作用的 scheme。
+# AppIcon.icon 必须真的在，而且里面要说得出一个图层、图也要在。
+#
+# 这条守卫针对的失败是**静默**的：actool 找不到图标时不报错，只给一条
+# warning，包里于是没有任何应用图标 —— 构建照样成功、测试照样全绿，症状要到
+# Dock 或访达里才看得出来。深色模式没有对应图标也是从这条路上来的：旧写法把
+# 深色图放在 appiconset 里，而 `--platform macosx` 没有那个槽位，于是 10 张
+# 深色图被当成 "unassigned children" 静默丢掉。
+def check_app_icon() -> int:
+    bundle = APP / "AppIcon.icon"
+    document = bundle / "icon.json"
+    if not document.is_file():
+        print(f"❌ 找不到 {document} —— AppIcon.icon 是应用图标的唯一来源，"
+              f"缺了它包里将没有任何图标（actool 只给 warning，不会让构建失败）",
+              file=sys.stderr)
+        return 1
+    try:
+        data = json.loads(document.read_text())
+    except json.JSONDecodeError as error:
+        print(f"❌ {document} 不是合法 JSON：{error}", file=sys.stderr)
+        return 1
+    layers = [layer for group in data.get("groups", []) for layer in group.get("layers", [])]
+    if not layers:
+        print(f"❌ {document} 里一个图层都没有 —— 那样出来的图标只有一个底色方块",
+              file=sys.stderr)
+        return 1
+    missing = [layer["image-name"] for layer in layers
+               if layer.get("image-name") and not (bundle / "Assets" / layer["image-name"]).is_file()]
+    if missing:
+        print(f"❌ 图层引用的图不在 Assets 里：{'、'.join(missing)}", file=sys.stderr)
+        return 1
+
+    # 没被引用的图**不会进包**（actool 只编译引用到的那几张）。所以
+    # "深色稿躺在 Assets 里但没人引用"意味着深色外观拿到的还是浅色稿 ——
+    # 而这一点在构建、测试、产物里都看不出来，只有肉眼比外观才发现。
+    # 这是提醒不是错误：只提供一套图是合法的。
+    text = document.read_text()
+    unused = sorted(item.name for item in (bundle / "Assets").iterdir()
+                    if item.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".pdf"}
+                    and item.name not in text)
+    if unused:
+        print(f"⚠️  AppIcon.icon/Assets 里这些图没有被 icon.json 引用：{'、'.join(unused)}")
+        print("    没被引用就不会进包 —— 若那是某一种外观（例如深色）的图，")
+        print("    说明那个外观现在用的是别的图。指派方式见 Documentation/ICONS.md。")
+    return 0
+
+
+def check_fresh_env_names() -> int:
+    source = (APP / "FreshRun.swift").read_text()
+    for key in ("ISC_PHECDA_FRESH", "ISC_SECRET_STORE"):
+        if f'"{key}"' not in source:
+            print(f"❌ FreshRun.swift 里找不到 {key} —— scheme 与代码已经不同步，"
+                  f"改名前先改这里", file=sys.stderr)
+            return 1
     return 0
 
 if __name__ == "__main__":

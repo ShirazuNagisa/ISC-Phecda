@@ -47,8 +47,36 @@ if [ -f "$APP/Contents/Resources/AppIcon.icns" ]; then
   echo "  ✅ Contents/Resources/AppIcon.icns"
 else
   echo "  ❌ 包内没有 AppIcon.icns —— 上传会报 90236（图标缺失）"
-  echo "     检查 AppIcon.appiconset 是否在**应用 target 编译的**资源目录里"
+  echo "     检查 AppIcon.icon 是否在**应用 target 编译的**资源目录里"
   fail=1
+fi
+
+# 图标必须带**外观变体**（深浅色各一套）。
+#
+# 这一条防的是静默失败：图标编译不进去时 actool 只给 warning，构建照样成功；
+# 而"深色变体丢了"更隐蔽 —— 旧写法把 `luminosity: dark` 放在 appiconset 里，
+# `actool --platform macosx` 没有那个槽位，10 张深色图被当作 "unassigned
+# children" 丢掉，产物里带外观变体的图标是 **0 条**，而浅色那份一切正常。
+# 用户看到的是"深色模式下图标不对"，从这里查不出任何线索。
+#
+# 断言直接读编译产物：Assets.car 里 AppIcon 至少有一条带 Appearance。
+if [ -f "$APP/Contents/Resources/Assets.car" ]; then
+  APPEARANCES="$(xcrun assetutil --info "$APP/Contents/Resources/Assets.car" 2>/dev/null \
+    | python3 -c '
+import json, sys
+try:
+    entries = json.load(sys.stdin)
+except Exception:
+    print(0); raise SystemExit
+print(sum(1 for e in entries if e.get("Name") == "AppIcon" and e.get("Appearance")))' 2>/dev/null || echo 0)"
+  if [ "${APPEARANCES:-0}" -gt 0 ]; then
+    echo "  ✅ AppIcon 带外观变体（$APPEARANCES 条：深浅色/Tinted）"
+  else
+    echo "  ❌ 包内 AppIcon 一条外观变体都没有 —— 深色模式会拿到浅色那张图"
+    echo "     图标要从 Apps/Phecda/AppIcon.icon 编译（Icon Composer 文档），"
+    echo "     不是 appiconset：macOS 的 actool 没有 appiconset 的深色槽位"
+    fail=1
+  fi
 fi
 
 # 沙箱必须开着 —— 上架版本没有它会被直接拒。
@@ -92,7 +120,7 @@ else
       # 这里再猜一遍路径就等于给"构建脚本和内核不同步"留了口子。
       executable="$(printf '%s\n' "$MANIFEST" | awk -F'\t' -v k="$kind" '$1==k{print $7}')"
       if [ -z "$executable" ]; then
-        echo "  ⚠️  $kind：内核清单里没有这个运行时，无法核对可执行文件"
+        echo "  ⚠️  ${kind}：内核清单里没有这个运行时，无法核对可执行文件"
       elif [ -f "$version_dir/$executable" ]; then
         echo "  ✅ $kind $version → $executable"
       else

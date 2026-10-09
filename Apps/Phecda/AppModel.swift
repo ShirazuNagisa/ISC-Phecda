@@ -169,6 +169,10 @@ enum AppSection: String, CaseIterable, Identifiable {
     ///
     /// 用户点过"稍后再说"之后不该每次启动都被再问一遍 —— 那是最容易被
     /// 当成"这个应用有毛病"的一类打扰。
+    ///
+    /// 存在 `Preferences`（而不是直接 `UserDefaults`）里：一次性运行模式
+    /// 要求这个标记**不落盘**，否则"每次都是全新安装"就少了最该复验的
+    /// 那一步（第一页引导）。见 `FreshRun`。
     private static let onboardingKey = "ISC.Phecda.onboardingDismissed"
     /// 建议动作要求界面跳到某处时记在这里，由 RootView 负责呈现。
     ///
@@ -186,6 +190,10 @@ enum AppSection: String, CaseIterable, Identifiable {
     private var lastNotification: [String: Date] = [:]
 
     init(dataDirectory: URL? = nil) {
+        // 一次性运行模式要先摆好环境（临时数据目录、文件密钥后端），
+        // 因为下面这一段就是要读数据目录的地方。幂等。
+        FreshRun.prepareIfNeeded()
+
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
 
         // # 目录名短是**功能要求**，不是审美
@@ -203,9 +211,30 @@ enum AppSection: String, CaseIterable, Identifiable {
         // 照样会超。真正稳的做法是让内核不依赖绝对路径长度（改动更大，
         // 见 Documentation/APPSTORE.md 阶段 2）。
         let root = support.appendingPathComponent("Phecda", isDirectory: true)
-        self.dataDirectory = dataDirectory ?? root
 
-        // 按"最近用过的"顺序迁移，先成功的那个会让后面几次变成空操作。
+        // 数据目录的优先级：调用方显式指定 → 环境变量 → 默认位置。
+        //
+        // 环境变量这一条与**内核自己的约定同名同义**（ISC-Core 的
+        // `paths.EnvDataDir`，`isc --data-dir` 也是设它）。界面是把数据目录
+        // 显式传给内核的，所以内核那一侧读不到环境变量 —— 得由界面来认它。
+        // 两边不一致的话，"换个目录跑一次"就会变成界面写进 A、内核读的是 B
+        // 那种最难查的局面。
+        let override = ProcessInfo.processInfo.environment[FreshRun.dataDirectoryKey]
+        let usesDefaultRoot = dataDirectory == nil && (override ?? "").isEmpty
+        if let dataDirectory {
+            self.dataDirectory = dataDirectory
+        } else if let override, !override.isEmpty {
+            self.dataDirectory = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            self.dataDirectory = root
+        }
+
+        // 迁移只在**用默认位置**时做。
+        //
+        // 这条判断不是洁癖：一次性运行模式给的是一个空目录，而在那儿搬一次
+        // 旧数据，等于"全新安装"里凭空多出上一次安装的凭据与站点 ——
+        // 恰恰是这个模式要避免的事。指定了别的目录时同理（那多半是测试）。
+        guard usesDefaultRoot else { return }
         Self.migrateLegacyData(
             from: support.appendingPathComponent("ISC Phecda/Kernel", isDirectory: true), to: root)
         Self.migrateLegacyData(
@@ -367,7 +396,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     /// 最后一条是补出来的：没有它，点过"稍后再说"的用户每次启动都会被
     /// 再问一遍 —— 那是最容易被当成"这个应用有毛病"的一类打扰。
     func updateOnboarding() {
-        guard !UserDefaults.standard.bool(forKey: Self.onboardingKey) else {
+        guard !Preferences.bool(Self.onboardingKey) else {
             showOnboarding = false
             return
         }
@@ -377,16 +406,16 @@ enum AppSection: String, CaseIterable, Identifiable {
     /// 让首次引导重新出现。
     ///
     /// 存在的理由不只是"用户想再看一遍"：**没有它就没法重测这个界面**。
-    /// 标记落在 UserDefaults 里，重测要先手动去删那个 key —— 而那一步
-    /// 在真机上和在开发机上一样别扭。
+    /// 标记落在偏好里，重测要先手动去删那个 key —— 而那一步在真机上和在
+    /// 开发机上一样别扭。（一次性运行模式里它本来就不落盘，见 `FreshRun`。）
     func restartOnboarding() {
-        UserDefaults.standard.removeObject(forKey: Self.onboardingKey)
+        Preferences.remove(Self.onboardingKey)
         showOnboarding = true
     }
 
     /// 用户关掉了首次引导：记住这件事。
     func dismissOnboarding() {
-        UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+        Preferences.set(Self.onboardingKey, true)
         showOnboarding = false
     }
 

@@ -100,6 +100,16 @@ struct RootView: View {
                       title: tr("内核没有启动", "The kernel did not start"),
                       message: model.errorMessage ?? tr("未知原因。", "Unknown reason."),
                       action: (tr("重试", "Try again"), { Task { await model.start() } }))
+        } else if model.phase == .starting {
+            // 「正在启动」必须与「未运行」分开。
+            //
+            // 它们在状态机里是两件事，而后者带一个「启动内核」按钮 ——
+            // 启动只需要几百毫秒，但现在的启动会**先弹主窗口**（见
+            // AppDelegate），于是那一瞬间的界面就是"内核未运行，点这里启动"。
+            // 用户会以为内核没起来，甚至真的去点那个按钮。
+            EmptyHint(symbol: "hourglass",
+                      title: tr("内核正在启动", "The kernel is starting"),
+                      message: tr("启动完成后这里会显示你的站点与建议。", "Your sites and suggestions appear here once it is up."))
         } else if !model.running {
             EmptyHint(symbol: "power",
                       title: tr("内核未运行", "The kernel is not running"),

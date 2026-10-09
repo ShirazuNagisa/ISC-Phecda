@@ -94,8 +94,31 @@ The supervisor layer owns runtime downloads, checksums, dependency installation,
 
 ## Window and menu bar model
 
-Phecda is a menu bar app (`LSUIElement`), not a window app that happens to have an icon.
+Phecda is a menu bar app that is also a normal app: it starts as a **regular** application
+(`LSUIElement` is false) and the user decides whether it keeps its Dock icon.
 
+- **The Dock icon is a user preference, not a build-time choice.** Settings has a
+  `不显示应用图标 / Hide the app icon` switch backed by
+  `ISC.Phecda.hideDockIcon` in `UserDefaults` (`DockIconPreference`). It calls
+  `NSApplication.setActivationPolicy` immediately: `.regular` (Dock + Cmd-Tab + menu bar) or
+  `.accessory` (menu bar only). Applying it in `applicationWillFinishLaunching` is what keeps a
+  "hidden" launch from showing the icon and then taking it away. `LSUIElement` is static, so it
+  can only express the default — showing the icon is the default because an app that does
+  nothing visible when you open it is worse than one extra Dock icon. The menu bar icon exists in
+  both modes, so hiding the Dock icon can never strand the user.
+- **The app opens its main window at launch**, and only a deliberate setting turns that off.
+  Settings has a `最小化启动 Phecda / Start Phecda minimized` switch
+  (`ISC.Phecda.startMinimized`, `LaunchPreference`); with it on, a launch is menu-bar only. The
+  default flipped in v0.4.4: an app that does nothing visible when you open it is the shape users
+  read as "it's broken", and on a fresh install the setup wizard — which lives in the main window —
+  never appeared at all. Opening the window costs nothing: the kernel runs in the same process
+  either way, and closing the window only closes the interface
+  (`applicationShouldTerminateAfterLastWindowClosed` is false).
+- **Clicking the Dock icon always brings the main window up** (`applicationShouldHandleReopen`).
+  This is not a document app, so AppKit's built-in "reopen the documents" behaviour has nothing to
+  reopen and the click appears to do nothing. The handler also deminiaturizes: a window sent to the
+  Dock is not brought back by `makeKeyAndOrderFront` alone, which is what "clicking the icon does
+  nothing" looks like for anyone who has ever minimized the window.
 - **The main window is a singleton.** Clicking the status item never creates a window; the
   window is opened from the panel and reused afterwards (`makeKeyAndOrderFront`), so repeated
   opens foreground the same window. Creating one `NSWindow` per click was the v0.4.0 behaviour
@@ -105,8 +128,72 @@ Phecda is a menu bar app (`LSUIElement`), not a window app that happens to have 
   an outside click. Because `.transient` makes the system close the panel on the very click
   that should reopen it, the delegate records the close time and the toggle treats a click
   arriving within 0.2 s of a close as "close only".
-- **The app does not open a window at launch.** The kernel runs whether or not a window exists;
-  popping one up on every launch is disruptive for a background service.
+- **"Starting" is its own state in the interface.** Because the window now appears while the
+  kernel is still coming up, `RootView` distinguishes `starting` from `not running`; the latter
+  offers a "Start kernel" button, and showing that button for a few hundred milliseconds makes the
+  user think the kernel failed to start.
+- **The system's `Settings…` menu item is removed** (`CommandGroup(replacing: .appSettings)`).
+  The one SwiftUI `Scene` is an empty `Settings`, so that item would open a blank window; the
+  app's settings live in the main window (the sidebar gear, and "go to settings" from an
+  advisory). A menu item that opens nothing is worse than no menu item.
+
+## Testing from zero
+
+Most first-run behaviour is only reachable once per installation: the setup wizard, "no DNS
+provider yet" on every page, the legacy data-directory migration. Verifying those repeatedly
+used to mean deleting the data directory, the preferences and a keychain entry by hand — all
+three of which a real installation is also using.
+
+`ISC_PHECDA_FRESH=1` (see `Apps/Phecda/FreshRun.swift`, launcher `Scripts/fresh-run.sh`) makes a
+launch disposable:
+
+| | normal run | `ISC_PHECDA_FRESH=1` |
+|---|---|---|
+| data directory | `~/Library/Application Support/Phecda` | `$TMPDIR/isc-fresh-<id>`, removed on quit |
+| master key | login keychain (`isc-core` / `master@<hash>`) | `secrets/master.key` inside that temp directory |
+| preferences | `UserDefaults` (`app.isc.phecda`) | in-memory only (`Preferences`) |
+| legacy data migration | yes | no |
+
+Two entry points, because there are two ways to build and test:
+
+| how you run it | entry point | what you get |
+|---|---|---|
+| Xcode | the **`Phecda-Fresh`** scheme (⌘R) | every Run starts from zero; `Phecda` stays on real data |
+| terminal | `Scripts/fresh-run.sh` | builds, then runs in the foreground so the kernel's stderr is visible |
+
+Both shared schemes (`Phecda`, `Phecda-Fresh`) are generated by `Scripts/gen-project.py`, so the
+environment variables live in the repository rather than in one person's `xcuserdata`. The fresh
+scheme also sets `ignoresPersistentStateOnLaunch`, because AppKit's window restoration is the one
+piece of state that would otherwise survive a fresh launch. Scheme environment variables apply to
+Xcode's **Run** action only — `xcodebuild build` does not read them, which is why the terminal
+path needs the script.
+
+`ISC_SECRET_STORE=file` has to come from the **launching** process, not from `setenv` inside
+the app: the kernel is a Go runtime in the same process, and Go snapshots `environ` when the
+library loads, so a later `setenv` is invisible to `os.Getenv` (ISC-Core hit the same wall with
+`ISC_BUNDLED_RUNTIMES`). Both entry points set it; when the app is started without it,
+`FreshRun` says so in the log instead of quietly adding a keychain entry per run.
+
+Nothing belonging to the real installation is read or written. The mode is opt-in through an
+environment variable, which only the launching process can set — the same footing as
+`ISC_PHECDA_SECTION`. `Scripts/fresh-run.sh --wipe` is the separate, destructive option for
+"make the real installation look like it was never installed"; it asks before deleting anything.
+It clears the local side only: DNS records, issued certificates, system proxy settings and a
+launchd service installed by `isc service install` are not touched.
+
+Some state deliberately survives both modes, because it does not live in the app at all:
+
+| state | why it survives | how to clear it |
+|---|---|---|
+| notification authorization | Not TCC — `tccutil reset Notifications` fails (measured); it lives in the notification database, with no supported CLI | System Settings → Notifications → remove ISC Phecda |
+| TCC grants (Files & Folders, …) | resetting them mid-test means a permission prompt on every folder you open | `--wipe` runs `tccutil reset All app.isc.phecda` |
+| DNS records, certificates, launchd service, system proxy | those are actions the kernel took **outside** this machine's app state; undoing them needs the provider's credentials or admin rights | by hand, on the provider side |
+
+The app honours `ISC_DATA_DIR` (`paths.EnvDataDir` in ISC-Core) because the kernel's own
+convention has to have the same meaning on this side of the C ABI — the GUI passes the data
+directory explicitly, so the kernel never reads that variable itself. Legacy migration only runs
+when the default location is in use; migrating into a scratch directory would put the previous
+installation's credentials and sites into what is supposed to be a fresh install.
 
 ### Occupancy is reported in two calibers
 

@@ -3,9 +3,18 @@
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>ISC Phecda</string><key>CFBundleDisplayName</key><string>ISC Phecda</string>
 <key>CFBundleIconName</key><string>AppIcon</string><key>CFBundleIdentifier</key><string>app.isc.phecda</string><key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
-<key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.4.2</string>
+<key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>0.4.5</string>
 <key>CFBundleVersion</key><string>2</string><key>ITSAppUsesNonExemptEncryption</key><false/><key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string><key>LSMinimumSystemVersion</key><string>27.0</string>
-<key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/>
+<!--
+  LSUIElement = false：应用按**普通应用**启动，程序坞里有图标，也在 Cmd-Tab 里。
+
+  这个键是静态的，因此它只能是默认值：想在程序坞里看不到应用的人，在设置里
+  打开「不显示应用图标」，由运行时的激活策略切回代理应用（见 DockIconPreference）。
+  默认给"看得见"是因为一个点了没反应的图标比一个多出来的图标更让人困惑 ——
+  v0.4.3 之前默认没有图标，双击程序坞/访达里的应用之后界面上什么也没发生。
+  菜单栏图标在两种形态下都在，所以关掉程序坞图标不会让人够不着应用。
+-->
+<key>LSUIElement</key><false/><key>NSHighResolutionCapable</key><true/>
 <key>CFBundleDevelopmentRegion</key><string>en</string><key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>

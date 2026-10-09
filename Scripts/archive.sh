@@ -118,7 +118,7 @@ xcodebuild archive \
   -configuration Release \
   -destination 'generic/platform=macOS' \
   CODE_SIGN_ENTITLEMENTS=Phecda-AppStore.entitlements \
-  ${DEVELOPMENT_TEAM:+-development-team "$DEVELOPMENT_TEAM"} \
+  ${DEVELOPMENT_TEAM:+DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"} \
   -archivePath "$ARCHIVE"
 
 echo "→ 归档完成：$ARCHIVE"
